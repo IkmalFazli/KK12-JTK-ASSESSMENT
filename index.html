@@ -6,7 +6,6 @@
 <title>KK12 JTK Selection Assessment</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
@@ -760,14 +759,11 @@ function renderResults(){
         <p class="mono" style="font-size:13px;color:#888;">${state.name} &middot; ${state.matric} &middot; ${streamLabel()} &middot; time used ${fmtTime(timeUsed)}</p>
         ${r.unanswered>0 ? `<div class="warnbox">${r.unanswered} question(s) were left unanswered.</div>` : ""}
         ${r.missingWork>0 ? `<div class="warnbox">${r.missingWork} of the 10 "work required" question(s) have no photo attached.</div>` : ""}
-        <button class="btn" id="downloadBtn">Download Submission Package (.zip)</button>
-        <p style="font-size:12.5px;color:#777;margin-top:14px;">Submit the downloaded .zip file through the official submission channel, as instructed.</p>
         <p class="mono" id="serverStatus" style="font-size:11.5px;color:#999;margin-top:10px;">Submitting to central database&hellip;</p>
       </div>
       <footer class="note">KK12 JTK Selection Assessment</footer>
     </div>
   `;
-  document.getElementById("downloadBtn").onclick = ()=> buildZipAndDownload(r);
   submitToServer(r);
 }
 
@@ -776,7 +772,7 @@ async function submitToServer(r){
   state.submittedToServer = true;
   const statusEl = document.getElementById("serverStatus");
   if(!db){
-    if(statusEl) statusEl.textContent = "Central submission isn't set up yet — please use the downloaded zip.";
+    if(statusEl) statusEl.textContent = "Central submission isn't set up yet. Please tell your lecturer immediately — your answers were not saved.";
     return;
   }
   try{
@@ -816,52 +812,8 @@ async function submitToServer(r){
     if(statusEl) statusEl.textContent = "Submitted to the central database successfully.";
   }catch(err){
     console.error(err);
-    if(statusEl) statusEl.textContent = "Could not reach the central database (no internet, or setup issue). Please make sure to submit your downloaded zip as backup.";
+    if(statusEl) statusEl.textContent = "Could not reach the central database (no internet, or setup issue). Please stay on this screen, check your connection, and tell your lecturer if this doesn't resolve — do not close this tab.";
   }
-}
-
-async function buildZipAndDownload(r){
-  const zip = new JSZip();
-  const lines = [];
-  lines.push(`KK12 JTK SELECTION ASSESSMENT — SUBMISSION`);
-  lines.push(`Name: ${state.name}`);
-  lines.push(`Student ID: ${state.matric}`);
-  lines.push(`Programme: ${streamLabel()}`);
-  lines.push(`Score (auto-graded MCQ): ${r.correct} / 50`);
-  lines.push(`Unanswered: ${r.unanswered}`);
-  lines.push(`Missing working photos: ${r.missingWork}`);
-  lines.push(`Submitted: ${new Date().toString()}`);
-  lines.push(``);
-  lines.push(`------------------------------------------------------------`);
-  r.rows.forEach(row=>{
-    lines.push(`Q${row.position} [Bank Ref #${row.id}]${row.needsWork ? " [WORK REQUIRED]" : ""}`);
-    lines.push(`  ${row.question}`);
-    lines.push(`  Your answer:    ${row.selected}`);
-    lines.push(`  Correct answer: ${row.correctAnswer}`);
-    lines.push(`  Result: ${row.isCorrect ? "CORRECT" : "INCORRECT"}${row.needsWork ? (row.hasWork ? " (working attached)" : " (NO WORKING ATTACHED)") : ""}`);
-    lines.push(``);
-  });
-  zip.file("summary.txt", lines.join("\n"));
-
-  const workFolder = zip.folder("working_photos");
-  Object.keys(state.images).forEach(qid=>{
-    (state.images[qid]||[]).forEach((img,i)=>{
-      const base64 = img.dataUrl.split(",")[1];
-      const ext = "jpg"; // images are re-encoded as JPEG during compression
-      workFolder.file(`Q${qid}_${i+1}.${ext}`, base64, {base64:true});
-    });
-  });
-
-  const blob = await zip.generateAsync({type:"blob"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const safeId = state.matric.replace(/[^a-zA-Z0-9]/g,"");
-  a.href = url;
-  a.download = `${safeId}_${state.stream}_KK12JTK_Submission.zip`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 render();
