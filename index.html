@@ -445,7 +445,7 @@ function renderEntry(){
       <div class="card">
         <label class="field-label" for="nameInput">Full Name</label>
         <input type="text" id="nameInput" placeholder="e.g. Ahmad bin Ismail" value="${state.name}"/>
-        <label class="field-label" for="matricInput">IC / Candidate Number</label>
+        <label class="field-label" for="matricInput">Student ID</label>
         <input type="text" id="matricInput" placeholder="e.g. 990101-xx-xxxx" value="${state.matric}"/>
         <label class="field-label">Programme</label>
         <div class="streamgroup">
@@ -825,7 +825,7 @@ async function buildZipAndDownload(r){
   const lines = [];
   lines.push(`KK12 JTK SELECTION ASSESSMENT — SUBMISSION`);
   lines.push(`Name: ${state.name}`);
-  lines.push(`IC / Candidate No.: ${state.matric}`);
+  lines.push(`Student ID: ${state.matric}`);
   lines.push(`Programme: ${streamLabel()}`);
   lines.push(`Score (auto-graded MCQ): ${r.correct} / 50`);
   lines.push(`Unanswered: ${r.unanswered}`);
