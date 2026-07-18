@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KK12 JTK — Results Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --paper:#f7f5ef; --ink:#1c2333; --rule:#c9c2ae; --indigo:#2c3a63; --indigo-dk:#1a2340;
+    --amber:#b5792b; --danger:#a5322a; --good:#3c6e47; --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      repeating-linear-gradient(0deg, rgba(44,58,99,0.05) 0px, rgba(44,58,99,0.05) 1px, transparent 1px, transparent 28px),
+      repeating-linear-gradient(90deg, rgba(44,58,99,0.05) 0px, rgba(44,58,99,0.05) 1px, transparent 1px, transparent 28px),
+      var(--paper);
+    color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    min-height:100vh;
+  }
+  .mono{ font-family:"SF Mono","Cascadia Code",Consolas,Menlo,monospace; }
+  #app{ max-width:1000px; margin:0 auto; padding:24px 18px 80px; }
+  .hero{ text-align:center; padding:32px 10px 16px; }
+  .hero .eyebrow{ font-family:"SF Mono",Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; font-size:12px; color:var(--indigo); opacity:.75; }
+  .hero h1{ font-size:28px; margin:8px 0 4px; color:var(--indigo-dk); }
+  .card{ background:var(--card); border:1px solid var(--rule); border-radius:2px; padding:26px; margin-top:18px; }
+  label.field-label{ display:block; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--indigo); margin-bottom:6px; font-family:"SF Mono",Consolas,monospace;}
+  input[type=text],input[type=password],input[type=email]{
+    width:100%; padding:11px 12px; font-size:16px; border:1px solid var(--rule); border-radius:2px;
+    font-family:inherit; background:#fffdf9; margin-bottom:16px;
+  }
+  .btn{
+    display:inline-block; background:var(--indigo); color:#fff; border:none;
+    padding:11px 22px; font-size:14px; border-radius:2px; cursor:pointer;
+    font-family:"SF Mono",Consolas,monospace; letter-spacing:.03em;
+  }
+  .btn:hover{ background:var(--indigo-dk); }
+  .btn.secondary{ background:transparent; color:var(--indigo); border:1px solid var(--indigo); }
+  .btn.small{ padding:7px 14px; font-size:12.5px; }
+  .errmsg{ color:var(--danger); font-size:13.5px; margin-bottom:12px; }
+  .topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .topbar .who{ font-family:"SF Mono",Consolas,monospace; font-size:12.5px; color:#777; }
+
+  .statsgrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0; }
+  .statbox{ background:var(--card); border:1px solid var(--rule); padding:14px; text-align:center; }
+  .statbox .num{ font-family:"SF Mono",Consolas,monospace; font-size:26px; color:var(--indigo-dk); }
+  .statbox .lbl{ font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:#888; margin-top:4px; }
+
+  .groupsection{ margin-top:30px; }
+  .groupsection h2{ font-size:19px; color:var(--indigo-dk); border-bottom:2px solid var(--amber); padding-bottom:6px; margin-bottom:0; }
+  table{ width:100%; border-collapse:collapse; margin-top:10px; font-size:13.5px; background:var(--card); }
+  th,td{ text-align:left; padding:9px 10px; border-bottom:1px solid var(--rule); }
+  th{ font-family:"SF Mono",Consolas,monospace; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#888; background:#f3efe3; }
+  tr.rank1 td:first-child{ color:#b5792b; font-weight:700; }
+  tr.rank2 td:first-child{ color:#6b6b6b; font-weight:700; }
+  tr.rank3 td:first-child{ color:#8a5a30; font-weight:700; }
+  .flag{ color:var(--danger); font-size:11.5px; }
+  .empty{ color:#888; font-size:13.5px; padding:14px 0; }
+  footer.note{ text-align:center; font-size:12px; color:#8a8a8a; margin-top:40px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDZj9TT50tLAvmePcsZOSLyEX5eyeTdaIk",
+  authDomain: "kk12-jtk-assessment.firebaseapp.com",
+  projectId: "kk12-jtk-assessment",
+  storageBucket: "kk12-jtk-assessment.firebasestorage.app",
+  messagingSenderId: "577888096821",
+  appId: "1:577888096821:web:6b1914523f7100ff8f577c"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const app = document.getElementById("app");
+let currentUser = null;
+let allSubmissions = [];
+let loading = false;
+let loadError = "";
+
+const STREAM_LABELS = {
+  hayat: "Asasi Sains Hayat",
+  fizikal: "Asasi Sains Fizikal",
+  sosial: "Asasi Sains Sosial"
+};
+const STREAM_ORDER = ["hayat","fizikal","sosial"];
+
+function render(){
+  if(!currentUser){ renderLogin(); return; }
+  renderDashboard();
+}
+
+function renderLogin(){
+  app.innerHTML = `
+    <div class="hero">
+      <div class="eyebrow">KK12 &middot; JTK</div>
+      <h1>Results Dashboard</h1>
+    </div>
+    <div class="card" style="max-width:420px;margin-left:auto;margin-right:auto;">
+      <div id="errArea"></div>
+      <label class="field-label" for="emailInput">Email</label>
+      <input type="email" id="emailInput" placeholder="you@example.com"/>
+      <label class="field-label" for="passInput">Password</label>
+      <input type="password" id="passInput" placeholder="••••••••"/>
+      <button class="btn" id="loginBtn" style="width:100%;">Sign In</button>
+    </div>
+  `;
+  document.getElementById("loginBtn").onclick = async ()=>{
+    const email = document.getElementById("emailInput").value.trim();
+    const pass = document.getElementById("passInput").value;
+    const errArea = document.getElementById("errArea");
+    errArea.innerHTML = "";
+    try{
+      await auth.signInWithEmailAndPassword(email, pass);
+    }catch(err){
+      errArea.innerHTML = `<div class="errmsg">${err.message}</div>`;
+    }
+  };
+}
+
+function computeStreamKey(sub){
+  // Prefer the explicit "stream" field; fall back to matching streamLabel text
+  if(sub.stream && STREAM_LABELS[sub.stream]) return sub.stream;
+  for(const key of STREAM_ORDER){
+    if(sub.streamLabel === STREAM_LABELS[key]) return key;
+  }
+  return "unknown";
+}
+
+function dedupeByMatric(subs){
+  // If a candidate submitted more than once, keep only their latest attempt.
+  const byMatric = {};
+  subs.forEach(s=>{
+    const key = (s.matric || "").trim().toLowerCase() || ("noid-" + s.id);
+    const existing = byMatric[key];
+    if(!existing || new Date(s.submittedAt) > new Date(existing.submittedAt)){
+      byMatric[key] = s;
+    }
+  });
+  return Object.values(byMatric);
+}
+
+async function loadData(){
+  loading = true; loadError = ""; render();
+  try{
+    const snap = await db.collection("submissions").get();
+    allSubmissions = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+  }catch(err){
+    loadError = err.message;
+  }
+  loading = false;
+  render();
+}
+
+function csvEscape(v){
+  const s = String(v==null ? "" : v);
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+
+function exportCsv(deduped){
+  const rows = [["Rank(within programme)","Programme","Name","Matric","Score","Unanswered","MissingWork","TimeUsedSec","SubmittedAt"]];
+  STREAM_ORDER.forEach(key=>{
+    const group = deduped.filter(s=>computeStreamKey(s)===key)
+      .sort((a,b)=> b.score - a.score || a.timeUsedSeconds - b.timeUsedSeconds);
+    group.forEach((s,i)=>{
+      rows.push([i+1, STREAM_LABELS[key], s.name, s.matric, s.score, s.unanswered, s.missingWork, s.timeUsedSeconds, s.submittedAt]);
+    });
+  });
+  const csv = rows.map(r=>r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `KK12_JTK_Results_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function renderDashboard(){
+  const deduped = dedupeByMatric(allSubmissions);
+  const totalRaw = allSubmissions.length;
+  const totalUnique = deduped.length;
+  const avgAll = totalUnique ? (deduped.reduce((s,x)=>s+x.score,0)/totalUnique).toFixed(1) : "—";
+
+  let html = `
+    <div class="topbar">
+      <div class="hero" style="padding:20px 0 0; text-align:left;">
+        <div class="eyebrow">KK12 &middot; JTK</div>
+        <h1 style="margin-bottom:0;">Results Dashboard</h1>
+      </div>
+      <div style="text-align:right;">
+        <div class="who">${currentUser.email}</div>
+        <button class="btn secondary small" id="signOutBtn" style="margin-top:6px;">Sign Out</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin:14px 0;">
+      <button class="btn small" id="refreshBtn">Refresh Data</button>
+      <button class="btn small secondary" id="exportBtn">Export CSV (all programmes)</button>
+    </div>
+
+    ${loading ? `<p class="mono">Loading submissions&hellip;</p>` : ""}
+    ${loadError ? `<div class="errmsg">Error loading data: ${loadError}</div>` : ""}
+
+    <div class="statsgrid">
+      <div class="statbox"><div class="num">${totalUnique}</div><div class="lbl">Unique Candidates</div></div>
+      <div class="statbox"><div class="num">${totalRaw}</div><div class="lbl">Total Submission Records</div></div>
+      <div class="statbox"><div class="num">${avgAll}</div><div class="lbl">Average Score (/50)</div></div>
+    </div>
+  `;
+
+  STREAM_ORDER.forEach(key=>{
+    const group = deduped.filter(s=>computeStreamKey(s)===key)
+      .sort((a,b)=> b.score - a.score || a.timeUsedSeconds - b.timeUsedSeconds);
+    const avg = group.length ? (group.reduce((s,x)=>s+x.score,0)/group.length).toFixed(1) : "—";
+    html += `
+      <div class="groupsection">
+        <h2>${STREAM_LABELS[key]} <span class="mono" style="font-size:13px;color:#888;">(${group.length} candidates, avg ${avg}/50)</span></h2>
+        ${group.length===0 ? `<div class="empty">No submissions yet.</div>` : `
+        <table>
+          <thead><tr>
+            <th>Rank</th><th>Name</th><th>Matric</th><th>Score</th><th>Time Used</th><th>Flags</th>
+          </tr></thead>
+          <tbody>
+            ${group.map((s,i)=>{
+              const rankClass = i===0?"rank1":i===1?"rank2":i===2?"rank3":"";
+              const mins = Math.floor((s.timeUsedSeconds||0)/60);
+              const secs = String((s.timeUsedSeconds||0)%60).padStart(2,"0");
+              const flags = [];
+              if(s.unanswered>0) flags.push(`${s.unanswered} unanswered`);
+              if(s.missingWork>0) flags.push(`${s.missingWork} missing work`);
+              return `<tr class="${rankClass}">
+                <td>${i+1}</td>
+                <td>${escapeHtml(s.name||"")}</td>
+                <td>${escapeHtml(s.matric||"")}</td>
+                <td class="mono">${s.score}/50</td>
+                <td class="mono">${mins}:${secs}</td>
+                <td class="flag">${flags.join(", ")}</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+        `}
+      </div>
+    `;
+  });
+
+  const unknownGroup = deduped.filter(s=>computeStreamKey(s)==="unknown");
+  if(unknownGroup.length){
+    html += `<div class="groupsection"><h2>Unrecognized Programme <span class="mono" style="font-size:13px;color:#888;">(${unknownGroup.length})</span></h2>
+      <div class="empty">These records didn't match a known programme value — check the raw data in Firestore.</div></div>`;
+  }
+
+  html += `<footer class="note">KK12 JTK Selection Assessment &middot; Results Dashboard</footer>`;
+  app.innerHTML = html;
+
+  document.getElementById("signOutBtn").onclick = ()=> auth.signOut();
+  document.getElementById("refreshBtn").onclick = loadData;
+  document.getElementById("exportBtn").onclick = ()=> exportCsv(deduped);
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+}
+
+auth.onAuthStateChanged(user=>{
+  currentUser = user;
+  if(user){ loadData(); } else { render(); }
+});
+
+render();
+</script>
+</body>
+</html>
