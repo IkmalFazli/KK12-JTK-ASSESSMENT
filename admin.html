@@ -118,9 +118,11 @@ let loadError = "";
 const STREAM_LABELS = {
   hayat: "Asasi Sains Hayat",
   fizikal: "Asasi Sains Fizikal",
-  sosial: "Asasi Sains Sosial"
+  islamsains: "Asasi Pengajian Islam Dan Sains (Fizikal/Hayat)",
+  sosial: "Asasi Sains Sosial",
+  diploma: "Diploma"
 };
-const STREAM_ORDER = ["hayat","fizikal","sosial"];
+const STREAM_ORDER = ["hayat","fizikal","islamsains","sosial","diploma"];
 
 function render(){
   if(!currentUser){ renderLogin(); return; }
