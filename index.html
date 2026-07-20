@@ -394,7 +394,9 @@ function buildRandomizedPages(bank){
 function streamLabel(){
   if(state.stream==="hayat") return "Asasi Sains Hayat";
   if(state.stream==="fizikal") return "Asasi Sains Fizikal";
+  if(state.stream==="islamsains") return "Asasi Pengajian Islam Dan Sains (Fizikal/Hayat)";
   if(state.stream==="sosial") return "Asasi Sains Sosial";
+  if(state.stream==="diploma") return "Diploma";
   return "—";
 }
 
@@ -450,7 +452,9 @@ function renderEntry(){
         <div class="streamgroup">
           <label class="streamopt"><input type="radio" name="stream" value="hayat" ${state.stream==='hayat'?'checked':''}/> Asasi Sains Hayat</label>
           <label class="streamopt"><input type="radio" name="stream" value="fizikal" ${state.stream==='fizikal'?'checked':''}/> Asasi Sains Fizikal</label>
+          <label class="streamopt"><input type="radio" name="stream" value="islamsains" ${state.stream==='islamsains'?'checked':''}/> Asasi Pengajian Islam Dan Sains (Fizikal/Hayat)</label>
           <label class="streamopt"><input type="radio" name="stream" value="sosial" ${state.stream==='sosial'?'checked':''}/> Asasi Sains Sosial</label>
+          <label class="streamopt"><input type="radio" name="stream" value="diploma" ${state.stream==='diploma'?'checked':''}/> Diploma</label>
         </div>
         <ul class="rules">
           <li><strong>50 questions</strong> across <strong>10 pages</strong> of 5 questions each, one mark per question.</li>
@@ -480,7 +484,7 @@ function renderEntry(){
       alert("Please select your programme before starting.");
       return;
     }
-    const bank = state.stream === "sosial" ? QUESTION_BANK_B : QUESTION_BANK_A;
+    const bank = (state.stream === "sosial" || state.stream === "diploma") ? QUESTION_BANK_B : QUESTION_BANK_A;
     state.pages = buildRandomizedPages(bank);
     state.flatOrder = state.pages.flat();
     state.currentPage = 0;
