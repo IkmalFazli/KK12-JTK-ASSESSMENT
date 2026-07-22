@@ -384,6 +384,13 @@ document.getElementById("photoModalOverlay").onclick = (e)=>{
 };
 
 auth.onAuthStateChanged(user=>{
+  if(user && user.isAnonymous){
+    // A leftover anonymous session from the quiz app (same domain/project) — not an admin login.
+    auth.signOut();
+    currentUser = null;
+    render();
+    return;
+  }
   currentUser = user;
   if(user){ loadData(); } else { render(); }
 });
