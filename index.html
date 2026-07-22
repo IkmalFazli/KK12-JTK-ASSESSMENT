@@ -3,24 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KK12 JTK Selection Assessment</title>
+<title>KK12 JTK — Results Dashboard</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
 <style>
   :root{
-    --paper:#f7f5ef;
-    --ink:#1c2333;
-    --rule:#c9c2ae;
-    --indigo:#2c3a63;
-    --indigo-dk:#1a2340;
-    --amber:#b5792b;
-    --danger:#a5322a;
-    --good:#3c6e47;
-    --card:#ffffff;
+    --paper:#f7f5ef; --ink:#1c2333; --rule:#c9c2ae; --indigo:#2c3a63; --indigo-dk:#1a2340;
+    --amber:#b5792b; --danger:#a5322a; --good:#3c6e47; --card:#ffffff;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -30,301 +20,83 @@
       repeating-linear-gradient(90deg, rgba(44,58,99,0.05) 0px, rgba(44,58,99,0.05) 1px, transparent 1px, transparent 28px),
       var(--paper);
     color:var(--ink);
-    font-family: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
     min-height:100vh;
   }
   .mono{ font-family:"SF Mono","Cascadia Code",Consolas,Menlo,monospace; }
-  #app{ max-width:980px; margin:0 auto; padding:24px 18px 80px; }
-
-  /* ---- Entry screen ---- */
-  .hero{ text-align:center; padding:40px 10px 20px; }
+  #app{ max-width:1000px; margin:0 auto; padding:24px 18px 80px; }
+  .hero{ text-align:center; padding:32px 10px 16px; }
   .hero .eyebrow{ font-family:"SF Mono",Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; font-size:12px; color:var(--indigo); opacity:.75; }
-  .hero h1{ font-size:32px; margin:10px 0 4px; color:var(--indigo-dk); }
-  .hero p.sub{ color:#555; font-size:15px; margin-top:2px;}
-  .signature{ width:56px; height:56px; margin:14px auto 0; }
-  .signature svg{ width:100%; height:100%; }
-  .entrywrap{ max-width:640px; margin:0 auto; }
-
-  .card{
-    background:var(--card);
-    border:1px solid var(--rule);
-    border-radius:2px;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.03);
-    padding:26px;
-    margin-top:22px;
-  }
+  .hero h1{ font-size:28px; margin:8px 0 4px; color:var(--indigo-dk); }
+  .card{ background:var(--card); border:1px solid var(--rule); border-radius:2px; padding:26px; margin-top:18px; }
   label.field-label{ display:block; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--indigo); margin-bottom:6px; font-family:"SF Mono",Consolas,monospace;}
-  input[type=text]{
+  input[type=text],input[type=password],input[type=email]{
     width:100%; padding:11px 12px; font-size:16px; border:1px solid var(--rule); border-radius:2px;
-    font-family: inherit; background:#fffdf9; margin-bottom:18px;
+    font-family:inherit; background:#fffdf9; margin-bottom:16px;
   }
-  input[type=text]:focus{ outline:2px solid var(--indigo); outline-offset:1px; }
   .btn{
     display:inline-block; background:var(--indigo); color:#fff; border:none;
-    padding:13px 26px; font-size:15px; border-radius:2px; cursor:pointer;
+    padding:11px 22px; font-size:14px; border-radius:2px; cursor:pointer;
     font-family:"SF Mono",Consolas,monospace; letter-spacing:.03em;
-    transition: background .15s ease;
   }
   .btn:hover{ background:var(--indigo-dk); }
-  .btn:disabled{ background:#999; cursor:not-allowed; }
   .btn.secondary{ background:transparent; color:var(--indigo); border:1px solid var(--indigo); }
-  .btn.secondary:hover{ background:rgba(44,58,99,0.06); }
-  .btn.small{ padding:9px 16px; font-size:13px; }
+  .btn.small{ padding:7px 14px; font-size:12.5px; }
+  .errmsg{ color:var(--danger); font-size:13.5px; margin-bottom:12px; }
+  .topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .topbar .who{ font-family:"SF Mono",Consolas,monospace; font-size:12.5px; color:#777; }
 
-  ul.rules{ padding-left:20px; color:#3a3a3a; font-size:14.5px; line-height:1.7;}
-  ul.rules li strong{ color:var(--indigo-dk); }
+  .statsgrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:18px 0; }
+  .statbox{ background:var(--card); border:1px solid var(--rule); padding:14px; text-align:center; }
+  .statbox .num{ font-family:"SF Mono",Consolas,monospace; font-size:26px; color:var(--indigo-dk); }
+  .statbox .lbl{ font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:#888; margin-top:4px; }
 
-  .streamgroup{ margin-bottom:18px; display:flex; flex-direction:column; gap:6px; }
-  .streamopt{
-    display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid var(--rule);
-    border-radius:2px; cursor:pointer; font-size:14.5px; background:#fffdf9;
-  }
-  .streamopt:hover{ background:#f3efe3; }
-  .streamopt input{ margin:0; }
-
-  /* ---- Sticky bar ---- */
-  #stickybar{
-    position:sticky; top:0; z-index:50;
-    background:var(--indigo-dk); color:#f2efe6;
-    padding:12px 18px; display:flex; align-items:center; justify-content:space-between;
-    font-family:"SF Mono",Consolas,monospace; font-size:14px;
-    border-bottom:3px solid var(--amber);
-    margin:0 -18px 18px;
-  }
-  #stickybar .timer{ font-size:20px; letter-spacing:.04em; }
-  #stickybar .timer.warn{ color:#ffd28a; }
-  #stickybar .timer.danger{ color:#ff9a8a; animation:pulse 1s infinite; }
-  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.55;} }
-  #stickybar .progress{ opacity:.85; }
-  #stickybar .submitbtn{ padding:8px 16px; font-size:13px; }
-
-  /* ---- layout: main + sidebar ---- */
-  .layout{ display:flex; gap:24px; align-items:flex-start; }
-  .quizmain{ flex:1; min-width:0; }
-  .sidebar{
-    width:216px; flex-shrink:0; position:sticky; top:76px;
-    background:var(--card); border:1px solid var(--rule); padding:16px; border-radius:2px;
-  }
-  .sidebar h3{ margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--indigo); font-family:"SF Mono",Consolas,monospace; }
-  .qgrid{ display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
-  .qbox{
-    aspect-ratio:1; display:flex; align-items:center; justify-content:center;
-    border:1px solid var(--rule); border-radius:3px; font-family:"SF Mono",Consolas,monospace;
-    font-size:12px; cursor:pointer; background:#fffdf9; color:var(--ink); user-select:none;
-    transition: transform .1s ease;
-  }
-  .qbox:hover{ transform:scale(1.08); }
-  .qbox.answered{ background:var(--good); color:#fff; border-color:var(--good); }
-  .qbox.currentpage{ outline:2px solid var(--indigo); outline-offset:1px; }
-  .qbox.work::after{ content:"\00b7"; }
-  .legend{ margin-top:12px; font-size:11.5px; color:#666; line-height:1.9; }
-  .legend .sw{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:middle; border:1px solid var(--rule); }
-  .legend .sw.g{ background:var(--good); border-color:var(--good); }
-
-  .pageheader{
-    display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px;
-    font-family:"SF Mono",Consolas,monospace; font-size:12.5px; color:#8a7f66; text-transform:uppercase; letter-spacing:.06em;
-  }
-  .pageheader strong{ color:var(--indigo-dk); font-size:14px; }
-
-  /* ---- Question cards ---- */
-  .qcard{
-    background:var(--card); border:1px solid var(--rule); border-radius:2px;
-    padding:22px; margin:0 0 16px;
-    scroll-margin-top:80px;
-  }
-  .qcard.unanswered{ border-left:4px solid var(--amber); }
-  .qcard.highlight-flash{ animation: flashHighlight 1.6s ease; }
-  @keyframes flashHighlight{ 0%{ box-shadow:0 0 0 4px var(--amber); } 100%{ box-shadow:0 0 0 0 rgba(0,0,0,0); } }
-  .qheader{ margin-bottom:12px; }
-  .qnum{
-    display:block; font-family:"Iowan Old Style",Georgia,serif; font-weight:700;
-    font-size:16px; color:var(--indigo-dk); letter-spacing:.01em;
-  }
-  .reqtag{
-    display:inline-block; margin-top:5px; background:#f6dfd4; color:var(--danger);
-    font-family:"SF Mono",Consolas,monospace; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
-    padding:3px 8px; border-radius:2px; font-weight:700;
-  }
-  .qtext{ font-size:16.5px; line-height:1.8; margin-bottom:14px; }
-  .qtext .katex{ font-size:1.08em; }
-  .opt{
-    display:flex; align-items:flex-start; gap:10px; padding:9px 10px; border-radius:2px;
-    cursor:pointer; margin-bottom:4px;
-  }
-  .opt:hover{ background:#f3efe3; }
-  .opt input{ margin-top:5px; flex-shrink:0; }
-  .opt .lbl{ font-family:"SF Mono",Consolas,monospace; font-weight:700; color:var(--indigo); margin-right:2px;}
-  .opt .opttext{ line-height:1.6; }
-  .worksection{ margin-top:16px; padding-top:14px; border-top:1px dashed var(--rule); }
-  .worksection .req{ color:var(--danger); font-weight:700; }
-  .worksection p{ font-size:13.5px; color:#555; margin:0 0 8px;}
-  .thumbs{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-  .thumbs .thumb{ position:relative; width:74px; height:74px; border:1px solid var(--rule); border-radius:2px; overflow:hidden; }
-  .thumbs .thumb img{ width:100%; height:100%; object-fit:cover; }
-  .thumbs .thumb button{
-    position:absolute; top:2px; right:2px; background:rgba(0,0,0,.6); color:#fff; border:none;
-    width:18px; height:18px; font-size:11px; border-radius:50%; cursor:pointer; line-height:1;
-  }
-  input[type=file]{ font-size:13px; }
-
-  .pagenav{ display:flex; justify-content:space-between; align-items:center; margin-top:22px; }
-  .pagenav .dots{ font-family:"SF Mono",Consolas,monospace; font-size:12.5px; color:#8a7f66; }
-
-  /* ---- overlay ---- */
-  #lockOverlay{
-    position:fixed; inset:0; background:rgba(20,24,40,.92); color:#f2efe6;
-    display:none; align-items:center; justify-content:center; z-index:200; text-align:center; padding:20px;
-    font-family:"SF Mono",Consolas,monospace;
-  }
-  #lockOverlay h2{ font-family:"Iowan Old Style",Georgia,serif; font-size:28px; }
-
-  /* ---- results ---- */
-  .score{ font-size:46px; color:var(--indigo-dk); font-family:"SF Mono",Consolas,monospace; }
-  .warnbox{ background:#fbeee0; border:1px solid #e0bf8f; color:#6b4a1a; padding:12px 14px; border-radius:2px; font-size:13.5px; margin:14px 0; }
+  .groupsection{ margin-top:30px; }
+  .groupsection h2{ font-size:19px; color:var(--indigo-dk); border-bottom:2px solid var(--amber); padding-bottom:6px; margin-bottom:0; }
+  table{ width:100%; border-collapse:collapse; margin-top:10px; font-size:13.5px; background:var(--card); }
+  th,td{ text-align:left; padding:9px 10px; border-bottom:1px solid var(--rule); }
+  th{ font-family:"SF Mono",Consolas,monospace; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#888; background:#f3efe3; }
+  tr.rank1 td:first-child{ color:#b5792b; font-weight:700; }
+  tr.rank2 td:first-child{ color:#6b6b6b; font-weight:700; }
+  tr.rank3 td:first-child{ color:#8a5a30; font-weight:700; }
+  .flag{ color:var(--danger); font-size:11.5px; }
+  .empty{ color:#888; font-size:13.5px; padding:14px 0; }
   footer.note{ text-align:center; font-size:12px; color:#8a8a8a; margin-top:40px; }
 
-  @media (max-width: 760px){
-    .layout{ flex-direction:column; }
-    .sidebar{ width:100%; position:static; order:-1; }
-    .qgrid{ grid-template-columns:repeat(10,1fr); }
+  .photolink{ font-family:"SF Mono",Consolas,monospace; font-size:11.5px; color:var(--indigo); cursor:pointer; text-decoration:underline; background:none; border:none; padding:0; }
+  .photolink:hover{ color:var(--indigo-dk); }
+
+  #photoModalOverlay{
+    position:fixed; inset:0; background:rgba(20,24,40,.75); z-index:300;
+    display:none; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto;
   }
+  #photoModal{
+    background:var(--paper); border:1px solid var(--rule); max-width:720px; width:100%;
+    padding:24px; position:relative;
+  }
+  #photoModal .closeBtn{
+    position:absolute; top:14px; right:16px; background:none; border:none; font-size:22px;
+    cursor:pointer; color:var(--indigo-dk); line-height:1;
+  }
+  #photoModal h3{ margin-top:0; color:var(--indigo-dk); }
+  .photogrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px; margin-top:16px; }
+  .photoitem{ border:1px solid var(--rule); background:#fff; padding:8px; text-align:center; }
+  .photoitem img{ width:100%; height:140px; object-fit:contain; background:#f3efe3; }
+  .photoitem .qtag{ font-family:"SF Mono",Consolas,monospace; font-size:11px; color:#666; margin:6px 0 4px; }
+  .photoitem a{ font-size:11.5px; color:var(--indigo); }
 </style>
 </head>
 <body>
-<div id="lockOverlay">
-  <div>
-    <h2>Time's up</h2>
-    <p>Your assessment has been locked and submitted automatically.</p>
+<div id="photoModalOverlay">
+  <div id="photoModal">
+    <button class="closeBtn" id="closePhotoModalBtn">&times;</button>
+    <h3 id="photoModalTitle">Working Photos</h3>
+    <div id="photoModalBody"></div>
   </div>
 </div>
 <div id="app"></div>
 
 <script>
-/* =====================================================================
-   QUESTION BANK — 50 questions.
-   needsWork: true (10 of them) => candidate must attach a photo of their
-   working. Pages are built so each page's LAST question is a needsWork one.
-   All maths is written in LaTeX (rendered by KaTeX) between $ ... $.
-   ===================================================================== */
-const QUESTION_BANK_A = [
-{id:1,q:"Is zero a rational number?",opts:["No, zero is irrational.","Yes, since $0 = \\dfrac{0}{1}$, where $0$ and $1$ are integers and $1 \\neq 0$.","No, zero is undefined.","Yes, but only when treated as a natural number."],ans:1,needsWork:false},
-{id:2,q:"Which of the following statements is FALSE?",opts:["Every natural number is a whole number.","Every integer is a whole number.","Every rational number is a real number.","Every irrational number is a real number."],ans:1,needsWork:false},
-{id:3,q:"Evaluate $(0.01)^{-\\frac{1}{2}}$ without using a calculator.",opts:["$0.1$","$10$","$100$","$-10$"],ans:1,needsWork:false},
-{id:4,q:"Evaluate $(0.008)^{\\frac{2}{3}}$ without using a calculator.",opts:["$0.04$","$0.4$","$0.2$","$0.008$"],ans:0,needsWork:true},
-{id:5,q:"Evaluate $\\left(-\\dfrac{1}{5}\\right)^{-3}$ without using a calculator.",opts:["$-\\dfrac{1}{125}$","$\\dfrac{1}{125}$","$-125$","$125$"],ans:2,needsWork:false},
-{id:6,q:"Simplify $\\dfrac{(2x^3y^{-4})^2}{8xy^{-6}}$.",opts:["$\\dfrac{x^5}{2y^2}$","$\\dfrac{x^2}{2y^5}$","$\\dfrac{2x^5}{y^2}$","$\\dfrac{x^5}{4y^2}$"],ans:0,needsWork:false},
-{id:7,q:"Simplify $\\sqrt{\\dfrac{3}{5}} \\cdot \\sqrt{\\dfrac{75}{27}}$.",opts:["$\\dfrac{\\sqrt{15}}{3}$","$\\dfrac{5}{3}$","$\\dfrac{\\sqrt{5}}{3}$","$\\dfrac{15}{3}$"],ans:0,needsWork:false},
-{id:8,q:"Evaluate $\\log_3\\left(27\\sqrt{3}\\right)$.",opts:["$3$","$\\dfrac{7}{2}$","$4$","$\\dfrac{9}{2}$"],ans:1,needsWork:false},
-{id:9,q:"Evaluate $\\log_{0.5}(0.0625)$.",opts:["$2$","$-4$","$4$","$-2$"],ans:2,needsWork:false},
-{id:10,q:"Solve $5^{x-2} = 625$.",opts:["$x = 2$","$x = 4$","$x = 6$","$x = 8$"],ans:2,needsWork:true},
-{id:11,q:"When a function undergoes both a reflection and a shift, what is the correct order of operations?",opts:["Shift first, then reflect.","Reflect first, then shift.","Either order gives the same final graph.","Reflection and shifting cannot be combined."],ans:1,needsWork:false},
-{id:12,q:"Given $y=f(x)$ with range $(-4, 6]$, what is the range of $g(x) = -f(x)$?",opts:["$(-4, 6]$","$[-6, 4)$","$(-6, 4]$","$[4, -6)$"],ans:1,needsWork:false},
-{id:13,q:"$f(x) = 3x$ is reflected about the $x$-axis, shifted right $2$ units, then downward $3$ units. Find $g(x)$.",opts:["$g(x) = -3x + 3$","$g(x) = -3x - 3$","$g(x) = 3x - 9$","$g(x) = -3(x + 2) - 3$"],ans:0,needsWork:true},
-{id:14,q:"$f(x) = \\dfrac{1}{2}x^2$ is reflected about the $x$-axis, shifted left $1$ unit, then upward $2$ units. Find $g(x)$.",opts:["$g(x) = -\\dfrac{1}{2}(x - 1)^2 + 2$","$g(x) = -\\dfrac{1}{2}(x + 1)^2 + 2$","$g(x) = \\dfrac{1}{2}(x + 1)^2 - 2$","$g(x) = -\\dfrac{1}{2}(x + 1)^2 - 2$"],ans:1,needsWork:false},
-{id:15,q:"$f(x) = 3x^2$ is shifted right $2$ units, then downward $1$ unit. Find $g(x)$.",opts:["$g(x) = 3x^2 - 12x + 11$","$g(x) = 3x^2 + 12x + 11$","$g(x) = 3x^2 - 12x + 13$","$g(x) = 3(x - 2)^2 + 1$"],ans:0,needsWork:false},
-{id:16,q:"$f(x) = \\dfrac{2}{x}$ is shifted right $2$ units, then downward $1$ unit. Find $g(x)$.",opts:["$g(x) = \\dfrac{2}{x + 2} - 1$","$g(x) = \\dfrac{2}{x - 2} + 1$","$g(x) = \\dfrac{2}{x - 2} - 1$","$g(x) = \\dfrac{2}{x - 1} - 2$"],ans:2,needsWork:false},
-{id:17,q:"$f(x) = \\dfrac{3}{x}$ is reflected about one axis, shifted left $2$ units, then downward $2$ units. Find $g(x)$.",opts:["$g(x) = \\dfrac{3}{x + 2} - 2$","$g(x) = -\\dfrac{3}{x + 2} - 2$","$g(x) = -\\dfrac{3}{x - 2} - 2$","$g(x) = -\\dfrac{3}{x + 2} + 2$"],ans:1,needsWork:false},
-{id:18,q:"Given $g(x) = 4x - x^2 - 2$ and $f(x) = x^2$, which transformation correctly produces $g(x)$ from $f(x)$?",opts:["Reflect about the $x$-axis, shift right $2$ units, then upward $2$ units.","Reflect about the $y$-axis, shift left $2$ units, then upward $2$ units.","Shift right $2$ units, then upward $2$ units (no reflection).","Reflect about the $x$-axis, shift left $2$ units, then downward $2$ units."],ans:0,needsWork:false},
-{id:19,q:"Find the range of $p(x) = 2x^2 - 4x + 3$.",opts:["$(-\\infty, 1]$","$[1, \\infty)$","$(-\\infty, \\infty)$","$[3, \\infty)$"],ans:1,needsWork:true},
-{id:20,q:"Find the domain of $k(x) = \\dfrac{2x - 4}{x - 3}$.",opts:["$\\mathbb{R} \\setminus \\{2\\}$","$\\mathbb{R} \\setminus \\{3\\}$","$\\mathbb{R} \\setminus \\{-3\\}$","$\\mathbb{R} \\setminus \\{4\\}$"],ans:1,needsWork:false},
-{id:21,q:"$f(x) = \\ln x$ is shifted left $3$ units, then downward $2$ units. Find $g(x)$.",opts:["$g(x) = \\ln(x - 3) - 2$","$g(x) = \\ln(x + 3) - 2$","$g(x) = \\ln(x + 3) + 2$","$g(x) = \\ln(x) - 3 - 2$"],ans:1,needsWork:false},
-{id:22,q:"$f(x) = e^{2x}$ is reflected about both axes, shifted right $1$ unit, then downward $3$ units. Find $g(x)$.",opts:["$g(x) = -e^{-2(x-1)} - 3$","$g(x) = -e^{2(x-1)} - 3$","$g(x) = e^{-2(x-1)} - 3$","$g(x) = -e^{-2(x+1)} - 3$"],ans:0,needsWork:true},
-{id:23,q:"$f(x) = 2\\sqrt{2}$ is a constant function. What is its range?",opts:["$[0, \\infty)$","$\\mathbb{R}$","$\\{2\\sqrt{2}\\}$","$(0, 2\\sqrt{2}]$"],ans:2,needsWork:false},
-{id:24,q:"Find the domain of $s(x) = -2 - \\ln(3 - x)$.",opts:["$(-\\infty, 3)$","$(3, \\infty)$","$(-\\infty, -3)$","$\\mathbb{R} \\setminus \\{3\\}$"],ans:0,needsWork:false},
-{id:25,q:"Find the range of $r(x) = 2 - e^{-x+2}$.",opts:["$(2, \\infty)$","$(-\\infty, 2)$","$[2, \\infty)$","$\\mathbb{R}$"],ans:1,needsWork:true},
-{id:26,q:"Find the $y$-intercept of $h(x) = -|2 - 2x| + 2$.",opts:["$-2$","$2$","$0$","$4$"],ans:2,needsWork:false},
-{id:27,q:"Find the range of $g(x) = -5|x + 3| - 5$.",opts:["$(-\\infty, -5]$","$[-5, \\infty)$","$(-\\infty, 5]$","$\\mathbb{R}$"],ans:0,needsWork:false},
-{id:28,q:"Find the $x$-intercept (to 2 d.p.) of $k(x) = 2 - e^{-3x+2}$.",opts:["$0.24$","$0.44$","$0.69$","$1.34$"],ans:1,needsWork:false},
-{id:29,q:"Given $f(x) = \\dfrac{|9x|}{5x}$, what is the range of $f$?",opts:["$\\left\\{\\dfrac{9}{5}\\right\\}$","$\\left\\{-\\dfrac{9}{5}\\right\\}$","$\\left\\{\\dfrac{9}{5}, -\\dfrac{9}{5}\\right\\}$","$\\left[-\\dfrac{9}{5}, \\dfrac{9}{5}\\right]$"],ans:2,needsWork:false},
-{id:30,q:"Given $k(x) = \\begin{cases} \\dfrac{2}{x-2}+2 & x<2 \\\\ 2(x-2)^2 & x\\ge 2 \\end{cases}$, find the range of $k$.",opts:["$[0, \\infty)$","$\\mathbb{R} \\setminus \\{2\\}$","$\\mathbb{R}$","$(-\\infty, 2]$"],ans:2,needsWork:false},
-{id:31,q:"Given $r(x) = \\begin{cases} 6-x & x<3 \\\\ \\sqrt{x-2} & 3\\le x<6 \\\\ 5-2x & x>6 \\end{cases}$, find the range of $r$.",opts:["$(-\\infty,-7]\\cup[1,2]\\cup(3,\\infty)$","$(-\\infty,-7)\\cup[1,2]\\cup(3,\\infty)$","$\\mathbb{R}$","$[1,2]\\cup(3,\\infty)$"],ans:0,needsWork:false},
-{id:32,q:"Given $f(x) = \\begin{cases} -\\sqrt{2-2x} & x<-1 \\\\ 4x+3 & x\\ge -1 \\end{cases}$ and $g(x) = \\begin{cases} x^2+1 & x\\ge 2 \\\\ -4 & x<2 \\end{cases}$, the range of $(f+g)(x)$ is:",opts:["$(-\\infty,-6)\\cup[-5,7)\\cup[16,\\infty)$","$(-\\infty,-6]\\cup[-5,7)\\cup[16,\\infty)$","$\\mathbb{R}$","$[-6, 16]$"],ans:0,needsWork:false},
-{id:33,q:"Given $f(x) = \\begin{cases} 2x-1 & x\\le -3 \\\\ x^2+3 & x>-3 \\end{cases}$ and $g(x) = \\begin{cases} x^2+5 & x>1 \\\\ 3 & x\\le 1 \\end{cases}$, the range of $(g-f)(x)$ is:",opts:["$(-9,0)\\cup\\{2\\}\\cup[10,\\infty)$","$(-9,0]\\cup\\{2\\}\\cup[10,\\infty)$","$[-9,10]$","$\\mathbb{R}$"],ans:1,needsWork:false},
-{id:34,q:"Given $f(x) = \\sqrt{2x+3}$ and $g(x) = x^2 - 2$, find the domain of $\\left(\\dfrac{f}{g}\\right)(x)$.",opts:["$\\left[-\\dfrac{3}{2}, \\infty\\right)$","$\\left[-\\dfrac{3}{2}, \\infty\\right) \\setminus \\{-\\sqrt{2}, \\sqrt{2}\\}$","$\\mathbb{R} \\setminus \\{-\\sqrt{2}, \\sqrt{2}\\}$","$\\left(-\\dfrac{3}{2}, \\infty\\right)$"],ans:1,needsWork:true},
-{id:35,q:"Find the domain of $f(x) = 2x - \\sqrt{4x - 3}$.",opts:["$\\left[\\dfrac{3}{4}, \\infty\\right)$","$\\left(\\dfrac{3}{4}, \\infty\\right)$","$\\mathbb{R}$","$\\left[\\dfrac{4}{3}, \\infty\\right)$"],ans:0,needsWork:false},
-{id:36,q:"Find the domain of $g(x) = \\dfrac{2x+3}{\\sqrt{3x+2}}$.",opts:["$\\left[-\\dfrac{2}{3}, \\infty\\right)$","$\\left(-\\dfrac{2}{3}, \\infty\\right)$","$\\mathbb{R} \\setminus \\left\\{-\\dfrac{2}{3}\\right\\}$","$\\left(-\\infty, -\\dfrac{2}{3}\\right)$"],ans:1,needsWork:false},
-{id:37,q:"Find the domain of $h(x) = \\dfrac{x^2 - 4}{|x-2| - 3}$.",opts:["$\\mathbb{R} \\setminus \\{5, -1\\}$","$\\mathbb{R} \\setminus \\{2, -2\\}$","$\\mathbb{R} \\setminus \\{5\\}$","$\\mathbb{R} \\setminus \\{-1\\}$"],ans:0,needsWork:false},
-{id:38,q:"Given $f(x) = 2x - 3$ and $g(x) = x^2 - 2x$, find $(f \\circ g)(x)$.",opts:["$2x^2 - 4x - 3$","$2x^2 - 4x + 3$","$4x^2 - 16x + 15$","$x^2 - 4x - 3$"],ans:0,needsWork:false},
-{id:39,q:"Given $f(x) = 2x - 3$ and $g(x) = x^2 - 2x$, find $(g \\circ f)(2)$.",opts:["$27$","$-1$","$1$","$15$"],ans:1,needsWork:true},
-{id:40,q:"Given $f(x) = |3 - x| + 2$ and $g(x) = 3$ (a constant function), find $(f \\circ g)(x)$.",opts:["$2$","$5$","$3$","$|3 - x| + 2$"],ans:0,needsWork:false},
-{id:41,q:"Find the range of $x$ satisfying $x > 1$ and $x \\le 4$, in interval notation.",opts:["$(1, 4)$","$(1, 4]$","$[1, 4]$","$[1, 4)$"],ans:1,needsWork:false},
-{id:42,q:"Solve $-2x \\ge 8$. Write the answer in interval notation.",opts:["$(-\\infty, -4]$","$[-4, \\infty)$","$(-\\infty, 4]$","$[4, \\infty)$"],ans:0,needsWork:false},
-{id:43,q:"Find the range of $x$ satisfying $x^2 > 4$.",opts:["$(-2, 2)$","$(-\\infty, -2)\\cup(2, \\infty)$","$(-\\infty, -2]\\cup[2, \\infty)$","$[-2, 2]$"],ans:1,needsWork:false},
-{id:44,q:"Solve $x^2 \\le 8x$.",opts:["$[0, 8]$","$(0, 8)$","$(-\\infty, 0]\\cup[8, \\infty)$","$[-8, 0]$"],ans:0,needsWork:false},
-{id:45,q:"Solve $x^2 - 4x + 3 > 0$.",opts:["$(1, 3)$","$(-\\infty, 1)\\cup(3, \\infty)$","$(-\\infty, 1]\\cup[3, \\infty)$","$[1, 3]$"],ans:1,needsWork:false},
-{id:46,q:"Solve $x^2 + x \\le 0$.",opts:["$[-1, 0]$","$(-1, 0)$","$(-\\infty, -1]\\cup[0, \\infty)$","$[0, 1]$"],ans:0,needsWork:false},
-{id:47,q:"Solve $x^3 - 5x^2 \\ge x - 5$.",opts:["$[-1, 1]\\cup[5, \\infty)$","$(-\\infty, -1]\\cup[1, 5]$","$[-1, 5]$","$[1, 5]$"],ans:0,needsWork:true},
-{id:48,q:"Solve $\\dfrac{(x + 7)(x - 4)}{x + 1} \\ge 0$.",opts:["$[-7, -1)\\cup[4, \\infty)$","$(-7, -1]\\cup[4, \\infty)$","$[-7, -1]\\cup[4, \\infty)$","$(-\\infty, -7]\\cup(-1, 4]$"],ans:0,needsWork:false},
-{id:49,q:"Solve $\\dfrac{y(y + 5)}{y - 3} \\ge 0$.",opts:["$[-5, 0]\\cup(3, \\infty)$","$[-5, 0)\\cup(3, \\infty)$","$(-5, 0]\\cup[3, \\infty)$","$[-5, 3]$"],ans:0,needsWork:false},
-{id:50,q:"Solve $\\dfrac{3x + 1}{x - 4} \\le 1$.",opts:["$\\left[-\\dfrac{5}{2}, 4\\right)$","$\\left(-\\dfrac{5}{2}, 4\\right]$","$\\left[-\\dfrac{5}{2}, 4\\right]$","$(-\\infty, -\\dfrac{5}{2}]\\cup(4, \\infty)$"],ans:0,needsWork:true},
-];
-
-/* =====================================================================
-   QUESTION BANK B — FAG 1004 syllabus (Numbers & Complex Numbers,
-   Indices/Surds/Logarithms, Linear & Quadratic Functions).
-   ===================================================================== */
-const QUESTION_BANK_B = [
-{id:1,q:"Is zero a rational number?",opts:["No, zero is irrational.","Yes, since $0 = \\dfrac{0}{1}$, where $0$ and $1$ are integers and $1 \\neq 0$.","No, zero is undefined.","Yes, but only when treated as a natural number."],ans:1,needsWork:false},
-{id:2,q:"Which of the following statements is FALSE?",opts:["Every natural number is a whole number.","Every rational number is a whole number.","Every irrational number is a real number.","$0$ is a whole number."],ans:1,needsWork:false},
-{id:3,q:"Simplify $[2, 4] \\cap (-1, e)$.",opts:["$[2, e)$","$[2, 4)$","$(2, e)$","$[2, e]$"],ans:0,needsWork:false},
-{id:4,q:"Evaluate $(0.01)^{-\\frac{1}{2}}$ without using a calculator.",opts:["$0.1$","$10$","$100$","$-10$"],ans:1,needsWork:false},
-{id:5,q:"Evaluate $(0.008)^{\\frac{2}{3}}$ without using a calculator.",opts:["$0.04$","$0.4$","$0.2$","$0.008$"],ans:0,needsWork:true},
-{id:6,q:"Evaluate $\\left(-\\dfrac{1}{5}\\right)^{-3}$ without using a calculator.",opts:["$-\\dfrac{1}{125}$","$\\dfrac{1}{125}$","$-125$","$125$"],ans:2,needsWork:false},
-{id:7,q:"Simplify $\\dfrac{(2x^3y^{-4})^2}{8xy^{-6}}$.",opts:["$\\dfrac{x^5}{2y^2}$","$\\dfrac{x^2}{2y^5}$","$\\dfrac{2x^5}{y^2}$","$\\dfrac{x^5}{4y^2}$"],ans:0,needsWork:false},
-{id:8,q:"Simplify $\\dfrac{(9x^2y^5)^2}{6y^{-3}}\\left(\\dfrac{1}{xy^{-4}}\\right)^2$.",opts:["$\\dfrac{27}{2}x^2y^{21}$","$\\dfrac{27}{2}x^4y^{13}$","$\\dfrac{9}{2}x^2y^{21}$","$27x^2y^{21}$"],ans:0,needsWork:true},
-{id:9,q:"Simplify $\\sqrt{\\dfrac{x}{y}}\\sqrt{\\dfrac{25y}{x^3}}$ (for $x>0$).",opts:["$\\dfrac{5}{x}$","$\\dfrac{5}{x^2}$","$\\dfrac{25}{x}$","$\\dfrac{1}{5x}$"],ans:0,needsWork:false},
-{id:10,q:"Simplify $\\sqrt{\\dfrac{3}{5}} \\cdot \\sqrt{\\dfrac{75}{27}}$.",opts:["$\\dfrac{\\sqrt{15}}{3}$","$\\dfrac{5}{3}$","$\\dfrac{\\sqrt{5}}{3}$","$\\dfrac{15}{3}$"],ans:0,needsWork:false},
-{id:11,q:"Simplify $8\\sqrt{2} - \\sqrt{32} + 5\\sqrt{98}$.",opts:["$39\\sqrt{2}$","$13\\sqrt{2}$","$9\\sqrt{2}$","$47\\sqrt{2}$"],ans:0,needsWork:false},
-{id:12,q:"Simplify $(2\\sqrt{3} - \\sqrt{2})(1 - 2\\sqrt{6})$.",opts:["$6\\sqrt{3} - 13\\sqrt{2}$","$6\\sqrt{3} + 13\\sqrt{2}$","$2\\sqrt{3} - 13\\sqrt{2}$","$6\\sqrt{3} - \\sqrt{2}$"],ans:0,needsWork:true},
-{id:13,q:"Evaluate $\\log_3\\left(27\\sqrt{3}\\right)$.",opts:["$3$","$\\dfrac{7}{2}$","$4$","$\\dfrac{9}{2}$"],ans:1,needsWork:false},
-{id:14,q:"Evaluate $\\log_{0.5}(0.0625)$.",opts:["$2$","$-4$","$4$","$-2$"],ans:2,needsWork:false},
-{id:15,q:"Evaluate $\\log_3 64 \\div \\log_3 4$.",opts:["$3$","$16$","$4$","$2$"],ans:0,needsWork:false},
-{id:16,q:"Solve $(\\sqrt{3})^{2x+1} = 9\\sqrt{3}$.",opts:["$x = 2$","$x = 1$","$x = 3$","$x = 1.5$"],ans:0,needsWork:false},
-{id:17,q:"Solve $2\\sqrt{1-x} = \\sqrt{16-3x} - 1$.",opts:["$x = -3$","$x = -35$","$x = 3$","$x = -11$"],ans:0,needsWork:true},
-{id:18,q:"Solve $\\sqrt{x} + \\sqrt{3x-2} = \\sqrt{6x+10}$.",opts:["$x = 9$","$x = -2$","$x = 6$","$x = 3$"],ans:0,needsWork:true},
-{id:19,q:"Solve $2^{1-x} = \\dfrac{9}{4}$ (give $x$ to 2 d.p.).",opts:["$x \\approx -0.17$","$x \\approx 0.17$","$x \\approx 1.17$","$x \\approx -1.17$"],ans:0,needsWork:false},
-{id:20,q:"Solve $(\\log x)^2 = \\log x^3$.",opts:["$x = 1$ or $x = 1000$","$x = 1$ only","$x = 1000$ only","$x = 0$ or $x = 1000$"],ans:0,needsWork:false},
-{id:21,q:"Solve $5 - 4\\log_3 x = \\log_x 3$.",opts:["$x = 3$ or $x = \\sqrt[4]{3}$","$x = 3$ or $x = \\sqrt[3]{3}$","$x = 9$ or $x = \\sqrt[4]{3}$","$x = 3$ only"],ans:0,needsWork:false},
-{id:22,q:"A lumber company has $1{,}200{,}000$ trees and harvests $7\\%$ each year, so $n = 1{,}200{,}000(1-0.07)^t$. To the nearest year, how many years does it take for the number of remaining trees to fall to half the original amount?",opts:["$9$ years","$10$ years","$11$ years","$14$ years"],ans:1,needsWork:false},
-{id:23,q:"A computer chip company models cost as $C = 10n^{\\frac{2}{3}} + 1500$. What is the maximum number of chips $n$ that can be produced with RM$10{,}000$?",opts:["$24{,}781$","$24{,}782$","$25{,}000$","$850$"],ans:0,needsWork:true},
-{id:24,q:"Is $10$ a real number or a complex number?",opts:["Only a real number.","Only a complex number.","Both — every real number is also a complex number with zero imaginary part.","Neither."],ans:2,needsWork:false},
-{id:25,q:"Find $\\text{Re}(z)$ for $z = \\dfrac{i-4}{2i-3}$.",opts:["$\\dfrac{14}{13}$","$\\dfrac{5}{13}$","$-\\dfrac{14}{13}$","$\\dfrac{4}{13}$"],ans:0,needsWork:true},
-{id:26,q:"Find $\\text{Im}(z)$ for $z = \\dfrac{i-4}{2i-3}$.",opts:["$\\dfrac{5}{13}$","$\\dfrac{14}{13}$","$-\\dfrac{5}{13}$","$\\dfrac{4}{13}$"],ans:0,needsWork:false},
-{id:27,q:"Given $z_1 = 2+3i$ and $z_2 = 2-3i$, find $\\text{Im}(z_1) + 2\\,\\text{Re}(z_2)$.",opts:["$7$","$3$","$4$","$9$"],ans:0,needsWork:false},
-{id:28,q:"Given $z_1 = 2+3i$ and $z_2 = 2-3i$, find $z_1 - z_2$.",opts:["$6i$","$4$","$-6i$","$4+6i$"],ans:0,needsWork:false},
-{id:29,q:"Given $z_1 = 2+3i$ and $z_2 = 2-3i$, find $2z_1 + 3z_2$.",opts:["$10 - 3i$","$10 + 3i$","$10 - 15i$","$4 - 3i$"],ans:0,needsWork:false},
-{id:30,q:"Evaluate $\\text{Im}\\{(3-2i)^2\\}$.",opts:["$-12$","$12$","$5$","$-5$"],ans:0,needsWork:false},
-{id:31,q:"For $z = 6-3i$, find $z + \\bar{z}$.",opts:["$12$","$45$","$6$","$-6i$"],ans:0,needsWork:false},
-{id:32,q:"For $z = \\sqrt{5} - 3i\\sqrt{5}$, find $z\\bar{z}$.",opts:["$50$","$5$","$45$","$20$"],ans:0,needsWork:false},
-{id:33,q:"Simplify $(2-7i)(3+4i)$.",opts:["$34 - 13i$","$34 + 13i$","$6 - 28i$","$-22 - 13i$"],ans:0,needsWork:false},
-{id:34,q:"Simplify $i^{17}$.",opts:["$i$","$-i$","$1$","$-1$"],ans:0,needsWork:false},
-{id:35,q:"Simplify $\\dfrac{1}{i}$.",opts:["$-i$","$i$","$1$","$-1$"],ans:0,needsWork:false},
-{id:36,q:"Simplify $\\dfrac{3}{1+i}$.",opts:["$\\dfrac{3}{2} - \\dfrac{3}{2}i$","$\\dfrac{3}{2} + \\dfrac{3}{2}i$","$3 - 3i$","$\\dfrac{3}{2}i$"],ans:0,needsWork:false},
-{id:37,q:"Simplify $\\dfrac{4+7i}{2+5i}$.",opts:["$\\dfrac{43}{29} - \\dfrac{6}{29}i$","$\\dfrac{43}{29} + \\dfrac{6}{29}i$","$\\dfrac{6}{29} - \\dfrac{43}{29}i$","$2 - i$"],ans:0,needsWork:true},
-{id:38,q:"Find the real values of $x$ and $y$ such that $(x+iy)(2+i) = 3-i$.",opts:["$x=1,\\ y=-1$","$x=-1,\\ y=1$","$x=1,\\ y=1$","$x=2,\\ y=-1$"],ans:0,needsWork:true},
-{id:39,q:"Solve $x^2 + 9 = 0$.",opts:["$x = \\pm 3i$","$x = \\pm 3$","$x = \\pm 9i$","$x = \\pm 9$"],ans:0,needsWork:false},
-{id:40,q:"Solve $x^2 - 4x + 7 = 0$.",opts:["$x = 2 \\pm i\\sqrt{3}$","$x = 2 \\pm \\sqrt{3}$","$x = -2 \\pm i\\sqrt{3}$","$x = 4 \\pm i\\sqrt{3}$"],ans:0,needsWork:false},
-{id:41,q:"Solve $x^2 + 2x + 5 = 0$.",opts:["$x = -1 \\pm 2i$","$x = 1 \\pm 2i$","$x = -1 \\pm 4i$","$x = -2 \\pm 2i$"],ans:0,needsWork:false},
-{id:42,q:"Find the quadratic equation with roots $x = 4+2i$ and $x = 4-2i$.",opts:["$x^2 - 8x + 20 = 0$","$x^2 + 8x + 20 = 0$","$x^2 - 8x + 16 = 0$","$x^2 - 4x + 20 = 0$"],ans:0,needsWork:false},
-{id:43,q:"The complex number $z = -2+2i$ lies in which quadrant of the Argand diagram?",opts:["Quadrant II","Quadrant I","Quadrant III","Quadrant IV"],ans:0,needsWork:false},
-{id:44,q:"$f(x) = -g(x-2)+3$. Describe the transformation applied to $g(x)$ to obtain $f(x)$.",opts:["Reflect about the $x$-axis, shift right $2$ units, then upward $3$ units.","Reflect about the $y$-axis, shift right $2$ units, then upward $3$ units.","Reflect about the $x$-axis, shift left $2$ units, then downward $3$ units.","Shift right $2$ units, then upward $3$ units (no reflection)."],ans:0,needsWork:false},
-{id:45,q:"$f(x) = g(-x+2)$. Describe the transformation applied to $g(x)$ to obtain $f(x)$.",opts:["Reflect about the $y$-axis, then shift right $2$ units.","Reflect about the $x$-axis, then shift right $2$ units.","Reflect about the $y$-axis, then shift left $2$ units.","Shift right $2$ units (no reflection)."],ans:0,needsWork:false},
-{id:46,q:"The minimum point of $y=f(x)$ is $(2,-1)$. Find the turning point of $y = f(-x) + 2$.",opts:["$(-2, 1)$","$(2, 1)$","$(-2, -1)$","$(2, -1)$"],ans:0,needsWork:false},
-{id:47,q:"The minimum point of $y=f(x)$ is $(2,-1)$. Find the turning point of $y = -f(x) + 2$.",opts:["$(2, 3)$","$(2, 1)$","$(-2, 3)$","$(2, -3)$"],ans:0,needsWork:true},
-{id:48,q:"Which function has a vertex at $(1, 2)$ and opens downward?",opts:["$g(x) = -2(x-1)^2 + 2$","$g(x) = 2(x-1)^2 + 2$","$g(x) = -2(x+1)^2 + 2$","$g(x) = 2(x-1)^2 - 2$"],ans:0,needsWork:false},
-{id:49,q:"$f(x) = \\dfrac{1}{2}x^2$ is reflected about the $x$-axis, shifted left $1$ unit, then upward $2$ units. Find $g(x)$.",opts:["$g(x) = -\\dfrac{1}{2}(x+1)^2 + 2$","$g(x) = \\dfrac{1}{2}(x+1)^2 - 2$","$g(x) = -\\dfrac{1}{2}(x-1)^2 + 2$","$g(x) = -\\dfrac{1}{2}(x+1)^2 - 2$"],ans:0,needsWork:false},
-{id:50,q:"Find the range of $h(x) = -(x-1)^2 + 4$.",opts:["$(-\\infty, 4]$","$[4, \\infty)$","$(-\\infty, 1]$","$[-4, \\infty)$"],ans:0,needsWork:false},
-];
-
-const QUIZ_DURATION_SECONDS = 60 * 60; // 60 minutes
-
-/* ---------------------------------------------------------------------
-   CENTRAL SUBMISSION — Firebase
-   Paste your Firebase project's config values here (from Firebase
-   Console > Project settings > General > Your apps > Web app).
-   Every submission is written straight to Firestore — no server needed.
---------------------------------------------------------------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyDZj9TT50tLAvmePcsZOSLyEX5eyeTdaIk",
   authDomain: "kk12-jtk-assessment.firebaseapp.com",
@@ -333,697 +105,288 @@ const firebaseConfig = {
   messagingSenderId: "577888096821",
   appId: "1:577888096821:web:6b1914523f7100ff8f577c"
 };
-let db = null;
-let auth = null;
-let myUid = null;
-let authReady = Promise.resolve();
-try{
-  if(firebaseConfig.apiKey.indexOf("PASTE_YOUR") !== 0){
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-    auth = firebase.auth();
-    authReady = auth.signInAnonymously()
-      .then(cred=>{ myUid = cred.user.uid; })
-      .catch(err=>{ console.error("Anonymous sign-in failed:", err); });
-  }
-}catch(err){ console.error("Firebase init failed:", err); }
-const LETTERS = ["A","B","C","D"];
-const PAGE_SIZE = 5;
-const NUM_PAGES = 10;
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-/* ---------------------------------------------------------------------
-   STATE (in-memory only — resets on page reload by design; a countdown
-   assessment should not be resumable via refresh).
---------------------------------------------------------------------- */
-let state = {
-  screen: "entry",       // entry | quiz | results
-  name: "",
-  matric: "",
-  email: "",
-  stream: "",            // "hayat" | "fizikal" | "islamsains" | "sosial" | "diploma"
-  startTime: null,
-  remaining: QUIZ_DURATION_SECONDS,
-  pages: [],             // array of NUM_PAGES pages, each an array of PAGE_SIZE question objects
-  flatOrder: [],         // pages flattened, gives global 1..50 numbering
-  currentPage: 0,
-  answers: {},           // id -> selected index (within shuffled opts)
-  images: {},            // id -> array of {name, dataUrl, firestoreId}
-  locked: false,
-  timerHandle: null,
-  jumpTarget: null,      // qid to scroll to + highlight after next render
-  resuming: false,       // true while we're checking/restoring a saved session
-};
-
-function shuffle(arr){
-  const a = arr.slice();
-  for(let i=a.length-1;i>0;i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [a[i],a[j]] = [a[j],a[i]];
-  }
-  return a;
-}
-
-function bankNameFor(stream){
-  return (stream === "sosial" || stream === "diploma") ? "B" : "A";
-}
-function bankFor(stream){
-  return bankNameFor(stream) === "B" ? QUESTION_BANK_B : QUESTION_BANK_A;
-}
-
-function toShuffledQ(q){
-  const optOrder = shuffle(q.opts.map((_,i)=>i)); // e.g. [2,0,3,1]
-  const opts = optOrder.map(i=>({text:q.opts[i], correct:i===q.ans}));
-  return { id:q.id, needsWork:q.needsWork, q:q.q, opts, optOrder };
-}
-
-function questionFromRecord(bank, rec){
-  const q = bank.find(bq=>bq.id===rec.id);
-  const opts = rec.optOrder.map(i=>({text:q.opts[i], correct:i===q.ans}));
-  return { id:q.id, needsWork:q.needsWork, q:q.q, opts, optOrder:rec.optOrder };
-}
-
-function buildRandomizedPages(bank){
-  const needs = shuffle(bank.filter(q=>q.needsWork));   // 10 items
-  const regs  = shuffle(bank.filter(q=>!q.needsWork));  // 40 items
-  let pages = [];
-  for(let i=0;i<NUM_PAGES;i++){
-    const regGroup = regs.slice(i*4, (i+1)*4).map(toShuffledQ);
-    const workQ = toShuffledQ(needs[i]);
-    pages.push([...regGroup, workQ]); // work-required question is always last on the page
-  }
-  pages = shuffle(pages); // randomize the order the pages are presented in
-  return pages;
-}
-
-function serializePages(pages){
-  return pages.map(page => page.map(q => ({ id:q.id, optOrder:q.optOrder })));
-}
-
-function reconstructPages(bank, pagesRecord){
-  return pagesRecord.map(page => page.map(rec => questionFromRecord(bank, rec)));
-}
-
-function streamLabel(){
-  if(state.stream==="hayat") return "Asasi Sains Hayat";
-  if(state.stream==="fizikal") return "Asasi Sains Fizikal";
-  if(state.stream==="islamsains") return "Asasi Pengajian Islam Dan Sains (Fizikal/Hayat)";
-  if(state.stream==="sosial") return "Asasi Sains Sosial";
-  if(state.stream==="diploma") return "Diploma";
-  return "—";
-}
-
-function fmtTime(sec){
-  sec = Math.max(0,sec);
-  const m = Math.floor(sec/60).toString().padStart(2,"0");
-  const s = Math.floor(sec%60).toString().padStart(2,"0");
-  return m+":"+s;
-}
-
-function renderMath(){
-  if(window.renderMathInElement){
-    renderMathInElement(document.getElementById("app"), {
-      delimiters: [
-        {left:"$$", right:"$$", display:true},
-        {left:"$", right:"$", display:false}
-      ],
-      throwOnError:false
-    });
-  }
-}
-
-/* ---------------------------------------------------------------------
-   RENDER
---------------------------------------------------------------------- */
 const app = document.getElementById("app");
+let currentUser = null;
+let allSubmissions = [];
+let loading = false;
+let loadError = "";
+
+const STREAM_LABELS = {
+  hayat: "Asasi Sains Hayat",
+  fizikal: "Asasi Sains Fizikal",
+  islamsains: "Asasi Pengajian Islam Dan Sains (Fizikal/Hayat)",
+  sosial: "Asasi Sains Sosial",
+  diploma: "Diploma"
+};
+const STREAM_ORDER = ["hayat","fizikal","islamsains","sosial","diploma"];
 
 function render(){
-  if(state.screen==="entry") renderEntry();
-  else if(state.screen==="quiz"){ renderQuiz(); applyJumpTarget(); }
-  else if(state.screen==="results") renderResults();
-  renderMath();
+  if(!currentUser){ renderLogin(); return; }
+  renderDashboard();
 }
 
-function renderEntry(){
+function renderLogin(){
   app.innerHTML = `
-    <div class="entrywrap">
-      <div class="hero">
+    <div class="hero">
+      <div class="eyebrow">KK12 &middot; JTK</div>
+      <h1>Results Dashboard</h1>
+    </div>
+    <div class="card" style="max-width:420px;margin-left:auto;margin-right:auto;">
+      <div id="errArea"></div>
+      <label class="field-label" for="emailInput">Email</label>
+      <input type="email" id="emailInput" placeholder="you@example.com"/>
+      <label class="field-label" for="passInput">Password</label>
+      <input type="password" id="passInput" placeholder="••••••••"/>
+      <button class="btn" id="loginBtn" style="width:100%;">Sign In</button>
+    </div>
+  `;
+  document.getElementById("loginBtn").onclick = async ()=>{
+    const email = document.getElementById("emailInput").value.trim();
+    const pass = document.getElementById("passInput").value;
+    const errArea = document.getElementById("errArea");
+    errArea.innerHTML = "";
+    try{
+      await auth.signInWithEmailAndPassword(email, pass);
+    }catch(err){
+      errArea.innerHTML = `<div class="errmsg">${err.message}</div>`;
+    }
+  };
+}
+
+function computeStreamKey(sub){
+  // Prefer the explicit "stream" field; fall back to matching streamLabel text
+  if(sub.stream && STREAM_LABELS[sub.stream]) return sub.stream;
+  for(const key of STREAM_ORDER){
+    if(sub.streamLabel === STREAM_LABELS[key]) return key;
+  }
+  return "unknown";
+}
+
+function dedupeByMatric(subs){
+  // If a candidate submitted more than once, keep only their latest attempt.
+  const byMatric = {};
+  subs.forEach(s=>{
+    const key = (s.matric || "").trim().toLowerCase() || ("noid-" + s.id);
+    const existing = byMatric[key];
+    if(!existing || new Date(s.submittedAt) > new Date(existing.submittedAt)){
+      byMatric[key] = s;
+    }
+  });
+  return Object.values(byMatric);
+}
+
+async function loadData(){
+  loading = true; loadError = ""; render();
+  try{
+    const snap = await db.collection("submissions").get();
+    allSubmissions = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+  }catch(err){
+    loadError = err.message;
+  }
+  loading = false;
+  render();
+}
+
+function csvEscape(v){
+  const s = String(v==null ? "" : v);
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+
+function exportCsv(deduped){
+  const rows = [["Rank(within programme)","Programme","Name","Matric","Score","Unanswered","MissingWork","TimeUsedSec","SubmittedAt"]];
+  STREAM_ORDER.forEach(key=>{
+    const group = deduped.filter(s=>computeStreamKey(s)===key)
+      .sort((a,b)=> b.score - a.score || a.timeUsedSeconds - b.timeUsedSeconds);
+    group.forEach((s,i)=>{
+      rows.push([i+1, STREAM_LABELS[key], s.name, s.matric, s.score, s.unanswered, s.missingWork, s.timeUsedSeconds, s.submittedAt]);
+    });
+  });
+  const csv = rows.map(r=>r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `KK12_JTK_Results_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function renderDashboard(){
+  const deduped = dedupeByMatric(allSubmissions);
+  const totalRaw = allSubmissions.length;
+  const totalUnique = deduped.length;
+  const avgAll = totalUnique ? (deduped.reduce((s,x)=>s+x.score,0)/totalUnique).toFixed(1) : "—";
+
+  let html = `
+    <div class="topbar">
+      <div class="hero" style="padding:20px 0 0; text-align:left;">
         <div class="eyebrow">KK12 &middot; JTK</div>
-        <h1>KK12 JTK Selection Assessment</h1>
-        <p class="sub">Numerical &amp; Mathematical Reasoning &middot; Online Assessment</p>
-        <div class="signature">
-          <svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="26" fill="none" stroke="#2c3a63" stroke-width="1.4"/>
-          <text x="28" y="34" text-anchor="middle" font-family="SF Mono, monospace" font-size="17" fill="#2c3a63">&int;f</text></svg>
-        </div>
+        <h1 style="margin-bottom:0;">Results Dashboard</h1>
       </div>
-      <div class="card">
-        <label class="field-label" for="nameInput">Full Name</label>
-        <input type="text" id="nameInput" placeholder="e.g. Ahmad bin Ismail" value="${state.name}"/>
-        <label class="field-label" for="matricInput">Student ID</label>
-        <input type="text" id="matricInput" placeholder="e.g. 22324xxx" value="${state.matric}"/>
-        <label class="field-label" for="emailInput">Email</label>
-        <input type="text" id="emailInput" placeholder="e.g. name@example.com" value="${state.email}"/>
-        <label class="field-label">Programme</label>
-        <div class="streamgroup">
-          <label class="streamopt"><input type="radio" name="stream" value="hayat" ${state.stream==='hayat'?'checked':''}/> Asasi Sains Hayat</label>
-          <label class="streamopt"><input type="radio" name="stream" value="fizikal" ${state.stream==='fizikal'?'checked':''}/> Asasi Sains Fizikal</label>
-          <label class="streamopt"><input type="radio" name="stream" value="islamsains" ${state.stream==='islamsains'?'checked':''}/> Asasi Pengajian Islam Dan Sains (Fizikal/Hayat)</label>
-          <label class="streamopt"><input type="radio" name="stream" value="sosial" ${state.stream==='sosial'?'checked':''}/> Asasi Sains Sosial</label>
-          <label class="streamopt"><input type="radio" name="stream" value="diploma" ${state.stream==='diploma'?'checked':''}/> Diploma</label>
-        </div>
-        <ul class="rules">
-          <li><strong>50 questions</strong> across <strong>10 pages</strong> of 5 questions each, one mark per question.</li>
-          <li>You have <strong>60 minutes</strong> once you press Start. The timer cannot be paused.</li>
-          <li>The assessment will <strong>auto-lock and submit</strong> the moment the timer reaches zero.</li>
-          <li>The <strong>last question on every page</strong> is marked <span class="mono req" style="color:#a5322a">[WORK REQUIRED]</span> — attach a photo of your written working for it.</li>
-          <li>Use the numbered panel on the right to jump to any question at any time.</li>
-          <li>Question order (and answer order) is <strong>randomized per candidate</strong>.</li>
-          <li>Do not refresh or close this tab once started — your progress is not saved on reload.</li>
-        </ul>
-        <button class="btn" id="startBtn">Start Assessment &rarr;</button>
+      <div style="text-align:right;">
+        <div class="who">${currentUser.email}</div>
+        <button class="btn secondary small" id="signOutBtn" style="margin-top:6px;">Sign Out</button>
       </div>
-      <footer class="note">KK12 JTK Selection Assessment</footer>
+    </div>
+
+    <div style="display:flex; gap:10px; margin:14px 0;">
+      <button class="btn small" id="refreshBtn">Refresh Data</button>
+      <button class="btn small secondary" id="exportBtn">Export CSV (all programmes)</button>
+    </div>
+
+    <div class="card" style="margin-top:6px;padding:18px 20px;">
+      <h3 style="margin:0 0 8px;font-size:13px;">Reset a Stuck Session</h3>
+      <p style="font-size:13px;color:#666;margin:0 0 12px;">
+        If a candidate is wrongly blocked (e.g. "already in progress on a different device"), enter their
+        Student ID below to clear their in-progress session so they can start fresh.
+        This does <strong>not</strong> touch any already-completed submission.
+      </p>
+      <div id="resetErrArea"></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="resetMatricInput" placeholder="Student ID" style="max-width:220px;margin-bottom:0;"/>
+        <button class="btn small secondary" id="resetSessionBtn">Clear Session</button>
+        <span class="mono" id="resetStatus" style="font-size:12px;color:#888;"></span>
+      </div>
+    </div>
+
+    ${loading ? `<p class="mono">Loading submissions&hellip;</p>` : ""}
+    ${loadError ? `<div class="errmsg">Error loading data: ${loadError}</div>` : ""}
+
+    <div class="statsgrid">
+      <div class="statbox"><div class="num">${totalUnique}</div><div class="lbl">Unique Candidates</div></div>
+      <div class="statbox"><div class="num">${totalRaw}</div><div class="lbl">Total Submission Records</div></div>
+      <div class="statbox"><div class="num">${avgAll}</div><div class="lbl">Average Score (/50)</div></div>
     </div>
   `;
-  document.getElementById("nameInput").oninput = e=> state.name = e.target.value;
-  document.getElementById("matricInput").oninput = e=> state.matric = e.target.value;
-  document.getElementById("emailInput").oninput = e=> state.email = e.target.value;
-  document.querySelectorAll('input[name="stream"]').forEach(r=>{
-    r.onchange = e=> state.stream = e.target.value;
-  });
-  document.getElementById("startBtn").onclick = async ()=>{
-    if(!state.name.trim() || !state.matric.trim()){
-      alert("Please enter your name and candidate number before starting.");
-      return;
-    }
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email.trim());
-    if(!emailOk){
-      alert("Please enter a valid email address before starting.");
-      return;
-    }
-    if(!state.stream){
-      alert("Please select your programme before starting.");
-      return;
-    }
 
-    const startBtn = document.getElementById("startBtn");
-    startBtn.disabled = true;
-    startBtn.textContent = "Checking for an existing session…";
-
-    const bank = bankFor(state.stream);
-    const result = await beginOrResumeSession(bank);
-
-    if(result.status === "blocked_submitted"){
-      alert("This Student ID has already completed this assessment. If you believe this is an error, please contact your lecturer.");
-      startBtn.disabled = false; startBtn.textContent = "Start Assessment →";
-      return;
-    }
-    if(result.status === "blocked_other_device"){
-      alert("This Student ID already has an assessment in progress or completed on a different device or browser. Please continue on the original device, or contact your lecturer.");
-      startBtn.disabled = false; startBtn.textContent = "Start Assessment →";
-      return;
-    }
-    if(result.status === "error"){
-      alert("Could not connect to the assessment server. Please check your internet connection and try again.");
-      startBtn.disabled = false; startBtn.textContent = "Start Assessment →";
-      return;
-    }
-
-    state.pages = result.pages;
-    state.flatOrder = state.pages.flat();
-    state.currentPage = 0;
-    state.startTime = result.startTime;
-    state.answers = result.answers;
-    state.images = result.images;
-    state.remaining = QUIZ_DURATION_SECONDS - Math.floor((Date.now()-state.startTime)/1000);
-
-    if(result.status === "expired"){
-      // Time had already run out while the student was away — finalize immediately.
-      state.screen = "results";
-      render();
-      return;
-    }
-
-    if(result.status === "resumed"){
-      alert("Your previous progress has been restored. Your timer continues from your original start time.");
-    }
-
-    state.screen = "quiz";
-    render();
-    startTimer();
-    window.onbeforeunload = ()=> "Your assessment is in progress. Leaving this page may lose your progress. Continue?";
-  };
-}
-
-/* ---------------------------------------------------------------------
-   SESSION PERSISTENCE (Firestore) — lets a refreshed/reopened tab resume
-   exactly where a candidate left off, using their Student ID as the key
-   and an anonymous auth UID to prove ownership of that session.
---------------------------------------------------------------------- */
-async function beginOrResumeSession(bank){
-  const matric = state.matric.trim();
-  if(!db){
-    // No backend configured — fall back to a fresh, non-persisted session.
-    return { status:"new", pages: buildRandomizedPages(bank), startTime: Date.now(), answers:{}, images:{} };
-  }
-  await authReady;
-  if(!myUid){
-    return { status:"error" };
-  }
-
-  const sessionRef = db.collection("activeSessions").doc(matric);
-  try{
-    const snap = await sessionRef.get();
-    if(snap.exists){
-      const data = snap.data();
-      if(data.ownerUid !== myUid){
-        return { status:"blocked_other_device" };
-      }
-      if(data.submitted){
-        return { status:"blocked_submitted" };
-      }
-      // It's our own in-progress session — restore it.
-      const pages = reconstructPages(bank, data.pagesRecord);
-      const elapsed = Math.floor((Date.now() - new Date(data.startTime).getTime())/1000);
-      const images = await loadSessionPhotos(matric);
-      const restoreResult = {
-        status: elapsed >= QUIZ_DURATION_SECONDS ? "expired" : "resumed",
-        pages, startTime: new Date(data.startTime).getTime(),
-        answers: data.answers || {}, images
-      };
-      return restoreResult;
-    }
-  }catch(err){
-    // Permission denied here means the doc exists but belongs to someone else —
-    // Firestore rules reject reads of docs you don't own before we even see "exists".
-    if(err.code === "permission-denied"){
-      return { status:"blocked_other_device" };
-    }
-    console.error(err);
-    return { status:"error" };
-  }
-
-  // No existing session — create a fresh one.
-  const pages = buildRandomizedPages(bank);
-  const startTime = Date.now();
-  try{
-    await sessionRef.set({
-      ownerUid: myUid,
-      name: state.name, email: state.email, matric, stream: state.stream,
-      pagesRecord: serializePages(pages),
-      startTime: new Date(startTime).toISOString(),
-      answers: {},
-      submitted: false
-    });
-  }catch(err){
-    console.error(err);
-    return { status:"error" };
-  }
-  return { status:"new", pages, startTime, answers:{}, images:{} };
-}
-
-async function loadSessionPhotos(matric){
-  const images = {};
-  try{
-    const snap = await db.collection("sessionPhotos").where("matric","==",matric).get();
-    const docs = snap.docs.map(d=>({ id:d.id, ...d.data() }))
-      .sort((a,b)=> new Date(a.uploadedAt) - new Date(b.uploadedAt));
-    docs.forEach(d=>{
-      if(!images[d.qid]) images[d.qid] = [];
-      images[d.qid].push({ name:`Q${d.qid}.jpg`, dataUrl:d.dataUrl, firestoreId:d.id });
-    });
-  }catch(err){ console.error("Could not load saved photos:", err); }
-  return images;
-}
-
-let answersSyncTimer = null;
-function syncAnswersToServer(){
-  if(!db || !myUid) return;
-  const matric = state.matric.trim();
-  if(!matric) return;
-  clearTimeout(answersSyncTimer);
-  answersSyncTimer = setTimeout(()=>{
-    db.collection("activeSessions").doc(matric).set({ answers: state.answers }, { merge:true })
-      .catch(err=> console.error("Could not sync answer:", err));
-  }, 600);
-}
-
-function startTimer(){
-  if(state.timerHandle) clearInterval(state.timerHandle);
-  state.timerHandle = setInterval(()=>{
-    const elapsed = Math.floor((Date.now()-state.startTime)/1000);
-    state.remaining = QUIZ_DURATION_SECONDS - elapsed;
-    updateStickyBar();
-    if(state.remaining<=0 && !state.locked){
-      lockAndSubmit(true);
-    }
-  },1000);
-}
-
-function updateStickyBar(){
-  const bar = document.getElementById("stickybar");
-  if(!bar) return;
-  const t = document.getElementById("timerDisplay");
-  const cls = state.remaining<=300 ? "timer danger" : state.remaining<=600 ? "timer warn" : "timer";
-  t.className = cls;
-  t.textContent = fmtTime(state.remaining);
-  const answered = Object.keys(state.answers).length;
-  document.getElementById("progressDisplay").textContent = `${answered} / 50 answered`;
-}
-
-function globalNumberFor(qid){
-  return state.flatOrder.findIndex(q=>q.id===qid) + 1;
-}
-function pageIndexFor(qid){
-  return Math.floor((globalNumberFor(qid)-1)/PAGE_SIZE);
-}
-
-function renderSidebar(){
-  let boxes = "";
-  state.flatOrder.forEach((q, i)=>{
-    const n = i+1;
-    const answered = state.answers[q.id] !== undefined;
-    const pIdx = Math.floor(i/PAGE_SIZE);
-    const cls = ["qbox"];
-    if(answered) cls.push("answered");
-    if(pIdx===state.currentPage) cls.push("currentpage");
-    if(q.needsWork) cls.push("work");
-    boxes += `<div class="${cls.join(' ')}" data-num="${n}" title="Question ${n}${q.needsWork?' (work required)':''}" onclick="jumpToQuestion(${q.id})">${n}</div>`;
-  });
-  return `
-    <div class="sidebar">
-      <h3>Questions</h3>
-      <div class="qgrid">${boxes}</div>
-      <div class="legend">
-        <div><span class="sw g"></span> Answered</div>
-        <div><span class="sw"></span> Not answered yet</div>
+  STREAM_ORDER.forEach(key=>{
+    const group = deduped.filter(s=>computeStreamKey(s)===key)
+      .sort((a,b)=> b.score - a.score || a.timeUsedSeconds - b.timeUsedSeconds);
+    const avg = group.length ? (group.reduce((s,x)=>s+x.score,0)/group.length).toFixed(1) : "—";
+    html += `
+      <div class="groupsection">
+        <h2>${STREAM_LABELS[key]} <span class="mono" style="font-size:13px;color:#888;">(${group.length} candidates, avg ${avg}/50)</span></h2>
+        ${group.length===0 ? `<div class="empty">No submissions yet.</div>` : `
+        <table>
+          <thead><tr>
+            <th>Rank</th><th>Name</th><th>Matric</th><th>Score</th><th>Time Used</th><th>Flags</th><th>Photos</th>
+          </tr></thead>
+          <tbody>
+            ${group.map((s,i)=>{
+              const rankClass = i===0?"rank1":i===1?"rank2":i===2?"rank3":"";
+              const mins = Math.floor((s.timeUsedSeconds||0)/60);
+              const secs = String((s.timeUsedSeconds||0)%60).padStart(2,"0");
+              const flags = [];
+              if(s.unanswered>0) flags.push(`${s.unanswered} unanswered`);
+              if(s.missingWork>0) flags.push(`${s.missingWork} missing work`);
+              return `<tr class="${rankClass}">
+                <td>${i+1}</td>
+                <td>${escapeHtml(s.name||"")}</td>
+                <td>${escapeHtml(s.matric||"")}</td>
+                <td class="mono">${s.score}/50</td>
+                <td class="mono">${mins}:${secs}</td>
+                <td class="flag">${flags.join(", ")}</td>
+                <td><button class="photolink" onclick="openPhotoModal('${s.id}', '${escapeHtml(s.name||"").replace(/'/g,"\\'")}')">View</button></td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+        `}
       </div>
-    </div>
-  `;
-}
-
-function renderQuiz(){
-  const answeredCount = Object.keys(state.answers).length;
-  const page = state.pages[state.currentPage];
-  const startNum = state.currentPage*PAGE_SIZE + 1;
-  const endNum = startNum + PAGE_SIZE - 1;
-
-  let qhtml = "";
-  page.forEach((q)=>{
-    const n = globalNumberFor(q.id);
-    const isAnswered = state.answers[q.id] !== undefined;
-    qhtml += `<div class="qcard ${isAnswered?'':'unanswered'}" data-qid="${q.id}">
-      <div class="qheader">
-        <span class="qnum">Question ${n}</span>
-        ${q.needsWork ? '<span class="reqtag">Work required — attach a photo below</span>' : ''}
-      </div>
-      <div class="qtext">${q.q}</div>
-      <div class="options">`;
-    q.opts.forEach((opt,i)=>{
-      const checked = state.answers[q.id]===i ? "checked" : "";
-      qhtml += `<label class="opt">
-        <input type="radio" name="q${q.id}" value="${i}" ${checked} onchange="selectAnswer(${q.id}, ${i})"/>
-        <span class="opttext"><span class="lbl">${LETTERS[i]})</span> ${opt.text}</span>
-      </label>`;
-    });
-    qhtml += `</div>`;
-    if(q.needsWork){
-      const imgs = state.images[q.id] || [];
-      qhtml += `<div class="worksection">
-        <p><span class="req">Required:</span> attach a photo of your handwritten working for this question.</p>
-        <input type="file" accept="image/*" capture="environment" multiple onchange="attachImages(${q.id}, this.files)"/>
-        <div class="thumbs" id="thumbs-${q.id}">
-          ${imgs.map((im,i)=>`<div class="thumb"><img src="${im.dataUrl}"/><button onclick="removeImage(${q.id},${i})">&times;</button></div>`).join("")}
-        </div>
-      </div>`;
-    }
-    qhtml += `</div>`;
+    `;
   });
 
-  const html = `
-    <div id="stickybar">
-      <div class="timer" id="timerDisplay">${fmtTime(state.remaining)}</div>
-      <div class="progress" id="progressDisplay">${answeredCount} / 50 answered</div>
-      <button class="btn submitbtn" id="submitBtn">Submit Now</button>
-    </div>
-    <div class="layout">
-      <div class="quizmain">
-        <div class="pageheader">
-          <strong>Page ${state.currentPage+1} of ${NUM_PAGES}</strong>
-          <span>Questions ${startNum}&ndash;${endNum}</span>
-        </div>
-        ${qhtml}
-        <div class="pagenav">
-          <button class="btn secondary small" id="prevBtn" ${state.currentPage===0?'disabled':''}>&larr; Previous Page</button>
-          <span class="dots">${Array.from({length:NUM_PAGES}).map((_,i)=>i===state.currentPage?'&#9679;':'&#9675;').join(' ')}</span>
-          <button class="btn secondary small" id="nextBtn" ${state.currentPage===NUM_PAGES-1?'disabled':''}>Next Page &rarr;</button>
-        </div>
-      </div>
-      ${renderSidebar()}
-    </div>
-  `;
+  const unknownGroup = deduped.filter(s=>computeStreamKey(s)==="unknown");
+  if(unknownGroup.length){
+    html += `<div class="groupsection"><h2>Unrecognized Programme <span class="mono" style="font-size:13px;color:#888;">(${unknownGroup.length})</span></h2>
+      <div class="empty">These records didn't match a known programme value — check the raw data in Firestore.</div></div>`;
+  }
+
+  html += `<footer class="note">KK12 JTK Selection Assessment &middot; Results Dashboard</footer>`;
   app.innerHTML = html;
-  document.getElementById("submitBtn").onclick = ()=>{
-    if(confirm("Submit your assessment now? You will not be able to change your answers after this.")){
-      lockAndSubmit(false);
-    }
-  };
-  const prevBtn = document.getElementById("prevBtn");
-  const nextBtn = document.getElementById("nextBtn");
-  if(prevBtn) prevBtn.onclick = ()=> gotoPage(state.currentPage-1);
-  if(nextBtn) nextBtn.onclick = ()=> gotoPage(state.currentPage+1);
+
+  document.getElementById("signOutBtn").onclick = ()=> auth.signOut();
+  document.getElementById("refreshBtn").onclick = loadData;
+  document.getElementById("exportBtn").onclick = ()=> exportCsv(deduped);
+  document.getElementById("resetSessionBtn").onclick = resetStuckSession;
 }
 
-window.gotoPage = function(p){
-  state.currentPage = Math.min(NUM_PAGES-1, Math.max(0,p));
-  render();
-  window.scrollTo({top:0, behavior:"smooth"});
-};
-
-window.jumpToQuestion = function(qid){
-  const pIdx = pageIndexFor(qid);
-  state.jumpTarget = qid;
-  if(pIdx !== state.currentPage){
-    state.currentPage = pIdx;
-  }
-  render();
-};
-
-function applyJumpTarget(){
-  if(!state.jumpTarget) return;
-  const qid = state.jumpTarget;
-  state.jumpTarget = null;
-  const el = document.querySelector(`.qcard[data-qid="${qid}"]`);
-  if(el){
-    el.scrollIntoView({behavior:"smooth", block:"center"});
-    el.classList.add("highlight-flash");
-    setTimeout(()=> el.classList.remove("highlight-flash"), 1600);
-  }
-}
-
-window.selectAnswer = function(qid, idx){
-  state.answers[qid] = idx;
-  const card = document.querySelector(`.qcard[data-qid="${qid}"]`);
-  if(card) card.classList.remove("unanswered");
-  document.getElementById("progressDisplay").textContent = `${Object.keys(state.answers).length} / 50 answered`;
-  const n = globalNumberFor(qid);
-  const box = document.querySelector(`.qbox[data-num="${n}"]`);
-  if(box) box.classList.add("answered");
-  syncAnswersToServer();
-};
-
-window.attachImages = function(qid, fileList){
-  if(!state.images[qid]) state.images[qid] = [];
-  const files = Array.from(fileList);
-  files.forEach(file=>{
-    compressImage(file, 1000, 0.6).then(dataUrl=>{
-      const imgObj = {name:file.name, dataUrl};
-      state.images[qid].push(imgObj);
-      renderThumbs(qid);
-      syncPhotoAdd(qid, dataUrl, imgObj);
-    }).catch(()=>{
-      const reader = new FileReader();
-      reader.onload = e=>{
-        const imgObj = {name:file.name, dataUrl:e.target.result};
-        state.images[qid].push(imgObj);
-        renderThumbs(qid);
-        syncPhotoAdd(qid, imgObj.dataUrl, imgObj);
-      };
-      reader.readAsDataURL(file);
-    });
-  });
-};
-
-function syncPhotoAdd(qid, dataUrl, imgObj){
-  if(!db || !myUid) return;
-  const matric = state.matric.trim();
-  if(!matric) return;
-  db.collection("sessionPhotos").add({
-    matric, ownerUid: myUid, qid: String(qid), dataUrl, uploadedAt: new Date().toISOString()
-  }).then(ref=>{ imgObj.firestoreId = ref.id; })
-    .catch(err=> console.error("Could not save photo:", err));
-}
-
-function compressImage(file, maxDim, quality){
-  return new Promise((resolve, reject)=>{
-    const reader = new FileReader();
-    reader.onload = e=>{
-      const img = new Image();
-      img.onload = ()=>{
-        let w = img.width, h = img.height;
-        if(w > maxDim || h > maxDim){
-          if(w > h){ h = Math.round(h * maxDim / w); w = maxDim; }
-          else { w = Math.round(w * maxDim / h); h = maxDim; }
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = w; canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-window.removeImage = function(qid, idx){
-  const imgObj = (state.images[qid]||[])[idx];
-  if(imgObj && imgObj.firestoreId && db){
-    db.collection("sessionPhotos").doc(imgObj.firestoreId).delete()
-      .catch(err=> console.error("Could not delete saved photo:", err));
-  }
-  state.images[qid].splice(idx,1);
-  renderThumbs(qid);
-};
-
-function renderThumbs(qid){
-  const box = document.getElementById(`thumbs-${qid}`);
-  if(!box) return;
-  const imgs = state.images[qid]||[];
-  box.innerHTML = imgs.map((im,i)=>`<div class="thumb"><img src="${im.dataUrl}"/><button onclick="removeImage(${qid},${i})">&times;</button></div>`).join("");
-}
-
-function lockAndSubmit(auto){
-  state.locked = true;
-  if(state.timerHandle) clearInterval(state.timerHandle);
-  window.onbeforeunload = null;
-  if(auto){
-    document.getElementById("lockOverlay").style.display = "flex";
-    setTimeout(()=>{
-      document.getElementById("lockOverlay").style.display = "none";
-      state.screen = "results";
-      render();
-    }, 1800);
-  } else {
-    state.screen = "results";
-    render();
-  }
-}
-
-function computeResults(){
-  let correct = 0, missingWork = 0, unanswered = 0;
-  const rows = state.flatOrder.map((q,idx)=>{
-    const sel = state.answers[q.id];
-    const isCorrect = sel!==undefined && q.opts[sel].correct;
-    if(isCorrect) correct++;
-    if(sel===undefined) unanswered++;
-    const hasWork = q.needsWork ? (state.images[q.id]||[]).length>0 : true;
-    if(q.needsWork && !hasWork) missingWork++;
-    return {position:idx+1, id:q.id, needsWork:q.needsWork, hasWork,
-      question:q.q, selected: sel!==undefined ? LETTERS[sel]+") "+q.opts[sel].text : "(no answer)",
-      correctAnswer: LETTERS[q.opts.findIndex(o=>o.correct)]+") "+q.opts.find(o=>o.correct).text,
-      isCorrect};
-  });
-  return {correct, missingWork, unanswered, rows};
-}
-
-function renderResults(){
-  const r = computeResults();
-  const timeUsed = QUIZ_DURATION_SECONDS - Math.max(0,state.remaining);
-  app.innerHTML = `
-    <div class="entrywrap">
-      <div class="hero">
-        <div class="eyebrow">Assessment Complete</div>
-        <h1>Results Summary</h1>
-      </div>
-      <div class="card" style="text-align:center;">
-        <div class="score">${r.correct} / 50</div>
-        <p style="color:#555;">Auto-graded MCQ score (photos of working are graded separately)</p>
-        <p class="mono" style="font-size:13px;color:#888;">${state.name} &middot; ${state.matric} &middot; ${streamLabel()} &middot; time used ${fmtTime(timeUsed)}</p>
-        ${r.unanswered>0 ? `<div class="warnbox">${r.unanswered} question(s) were left unanswered.</div>` : ""}
-        ${r.missingWork>0 ? `<div class="warnbox">${r.missingWork} of the 10 "work required" question(s) have no photo attached.</div>` : ""}
-        <p class="mono" id="serverStatus" style="font-size:11.5px;color:#999;margin-top:10px;">Submitting to central database&hellip;</p>
-      </div>
-      <footer class="note">KK12 JTK Selection Assessment</footer>
-    </div>
-  `;
-  submitToServer(r);
-}
-
-async function submitToServer(r){
-  if(state.submittedToServer) return;
-  state.submittedToServer = true;
-  const statusEl = document.getElementById("serverStatus");
-  if(!db){
-    if(statusEl) statusEl.textContent = "Central submission isn't set up yet. Please tell your lecturer immediately — your answers were not saved.";
+async function resetStuckSession(){
+  const input = document.getElementById("resetMatricInput");
+  const errArea = document.getElementById("resetErrArea");
+  const statusEl = document.getElementById("resetStatus");
+  const matric = input.value.trim();
+  errArea.innerHTML = "";
+  statusEl.textContent = "";
+  if(!matric){
+    errArea.innerHTML = `<div class="errmsg">Enter a Student ID first.</div>`;
     return;
   }
+  if(!confirm(`Clear the in-progress session for Student ID "${matric}"? They will be able to start a brand-new attempt (a completed submission, if any, is not affected).`)){
+    return;
+  }
+  statusEl.textContent = "Clearing…";
   try{
-    const submissionRef = await db.collection("submissions").add({
-      name: state.name,
-      matric: state.matric,
-      email: state.email,
-      stream: state.stream,
-      streamLabel: streamLabel(),
-      score: r.correct,
-      unanswered: r.unanswered,
-      missingWork: r.missingWork,
-      timeUsedSeconds: QUIZ_DURATION_SECONDS - Math.max(0, state.remaining),
-      submittedAt: new Date().toISOString(),
-      rows: r.rows.map(row=>({
-        position: row.position, id: row.id, question: row.question,
-        selected: row.selected, correctAnswer: row.correctAnswer,
-        isCorrect: row.isCorrect, needsWork: row.needsWork, hasWork: row.hasWork
-      }))
-    });
-
-    const photoWrites = [];
-    Object.keys(state.images).forEach(qid=>{
-      (state.images[qid] || []).forEach((img, i)=>{
-        photoWrites.push(db.collection("workingPhotos").add({
-          submissionId: submissionRef.id,
-          matric: state.matric,
-          name: state.name,
-          qid: qid,
-          index: i+1,
-          dataUrl: img.dataUrl,
-          uploadedAt: new Date().toISOString()
-        }));
-      });
-    });
-    await Promise.all(photoWrites);
-    await finalizeSession();
-
-    if(statusEl) statusEl.textContent = "Submitted to the central database successfully.";
+    await db.collection("activeSessions").doc(matric).delete();
+    const photoSnap = await db.collection("sessionPhotos").where("matric","==",matric).get();
+    await Promise.all(photoSnap.docs.map(d=> d.ref.delete()));
+    statusEl.textContent = `Done — "${matric}" can start a new attempt.`;
+    input.value = "";
   }catch(err){
-    console.error(err);
-    if(statusEl) statusEl.textContent = "Could not reach the central database (no internet, or setup issue). Please stay on this screen, check your connection, and tell your lecturer if this doesn't resolve — do not close this tab.";
+    errArea.innerHTML = `<div class="errmsg">Could not clear session: ${err.message}</div>`;
+    statusEl.textContent = "";
   }
 }
 
-async function finalizeSession(){
-  if(!db) return;
-  const matric = state.matric.trim();
-  if(!matric) return;
-  try{
-    await db.collection("activeSessions").doc(matric).set({ submitted:true }, { merge:true });
-    const snap = await db.collection("sessionPhotos").where("matric","==",matric).get();
-    await Promise.all(snap.docs.map(d=> d.ref.delete()));
-  }catch(err){
-    console.error("Could not finalize session cleanup:", err);
-  }
+function escapeHtml(s){
+  return String(s).replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 }
+
+window.openPhotoModal = async function(submissionId, name){
+  const overlay = document.getElementById("photoModalOverlay");
+  const titleEl = document.getElementById("photoModalTitle");
+  const bodyEl = document.getElementById("photoModalBody");
+  titleEl.textContent = `Working Photos — ${name}`;
+  bodyEl.innerHTML = `<p class="mono" style="color:#888;">Loading photos&hellip;</p>`;
+  overlay.style.display = "flex";
+
+  try{
+    const snap = await db.collection("workingPhotos").where("submissionId","==",submissionId).get();
+    if(snap.empty){
+      bodyEl.innerHTML = `<div class="empty">No photos were uploaded for this candidate.</div>`;
+      return;
+    }
+    const photos = snap.docs.map(d=>d.data()).sort((a,b)=> (a.qid - b.qid) || (a.index - b.index));
+    bodyEl.innerHTML = `<div class="photogrid">
+      ${photos.map(p=>`
+        <div class="photoitem">
+          <img src="${p.dataUrl}" alt="Question ${p.qid} working"/>
+          <div class="qtag">Question #${p.qid} &middot; photo ${p.index}</div>
+          <a href="${p.dataUrl}" download="Q${p.qid}_${p.index}_${(name||'').replace(/[^a-zA-Z0-9]/g,'')}.jpg">Download</a>
+        </div>
+      `).join("")}
+    </div>`;
+  }catch(err){
+    bodyEl.innerHTML = `<div class="errmsg">Could not load photos: ${err.message}</div>`;
+  }
+};
+
+function closePhotoModal(){
+  document.getElementById("photoModalOverlay").style.display = "none";
+}
+document.getElementById("closePhotoModalBtn").onclick = closePhotoModal;
+document.getElementById("photoModalOverlay").onclick = (e)=>{
+  if(e.target.id === "photoModalOverlay") closePhotoModal();
+};
+
+auth.onAuthStateChanged(user=>{
+  currentUser = user;
+  if(user){ loadData(); } else { render(); }
+});
 
 render();
 </script>
