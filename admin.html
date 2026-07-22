@@ -238,6 +238,21 @@ function renderDashboard(){
       <button class="btn small secondary" id="exportBtn">Export CSV (all programmes)</button>
     </div>
 
+    <div class="card" style="margin-top:6px;padding:18px 20px;">
+      <h3 style="margin:0 0 8px;font-size:13px;">Reset a Stuck Session</h3>
+      <p style="font-size:13px;color:#666;margin:0 0 12px;">
+        If a candidate is wrongly blocked (e.g. "already in progress on a different device"), enter their
+        Student ID below to clear their in-progress session so they can start fresh.
+        This does <strong>not</strong> touch any already-completed submission.
+      </p>
+      <div id="resetErrArea"></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="resetMatricInput" placeholder="Student ID" style="max-width:220px;margin-bottom:0;"/>
+        <button class="btn small secondary" id="resetSessionBtn">Clear Session</button>
+        <span class="mono" id="resetStatus" style="font-size:12px;color:#888;"></span>
+      </div>
+    </div>
+
     ${loading ? `<p class="mono">Loading submissions&hellip;</p>` : ""}
     ${loadError ? `<div class="errmsg">Error loading data: ${loadError}</div>` : ""}
 
@@ -297,6 +312,34 @@ function renderDashboard(){
   document.getElementById("signOutBtn").onclick = ()=> auth.signOut();
   document.getElementById("refreshBtn").onclick = loadData;
   document.getElementById("exportBtn").onclick = ()=> exportCsv(deduped);
+  document.getElementById("resetSessionBtn").onclick = resetStuckSession;
+}
+
+async function resetStuckSession(){
+  const input = document.getElementById("resetMatricInput");
+  const errArea = document.getElementById("resetErrArea");
+  const statusEl = document.getElementById("resetStatus");
+  const matric = input.value.trim();
+  errArea.innerHTML = "";
+  statusEl.textContent = "";
+  if(!matric){
+    errArea.innerHTML = `<div class="errmsg">Enter a Student ID first.</div>`;
+    return;
+  }
+  if(!confirm(`Clear the in-progress session for Student ID "${matric}"? They will be able to start a brand-new attempt (a completed submission, if any, is not affected).`)){
+    return;
+  }
+  statusEl.textContent = "Clearing…";
+  try{
+    await db.collection("activeSessions").doc(matric).delete();
+    const photoSnap = await db.collection("sessionPhotos").where("matric","==",matric).get();
+    await Promise.all(photoSnap.docs.map(d=> d.ref.delete()));
+    statusEl.textContent = `Done — "${matric}" can start a new attempt.`;
+    input.value = "";
+  }catch(err){
+    errArea.innerHTML = `<div class="errmsg">Could not clear session: ${err.message}</div>`;
+    statusEl.textContent = "";
+  }
 }
 
 function escapeHtml(s){
