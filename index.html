@@ -416,11 +416,12 @@ function buildRandomizedPages(bank){
 }
 
 function serializePages(pages){
-  return pages.map(page => page.map(q => ({ id:q.id, optOrder:q.optOrder })));
+  // Firestore rejects arrays-of-arrays, so each page is wrapped in an object.
+  return pages.map(page => ({ q: page.map(q => ({ id:q.id, optOrder:q.optOrder })) }));
 }
 
 function reconstructPages(bank, pagesRecord){
-  return pagesRecord.map(page => page.map(rec => questionFromRecord(bank, rec)));
+  return pagesRecord.map(pageObj => pageObj.q.map(rec => questionFromRecord(bank, rec)));
 }
 
 function streamLabel(){
