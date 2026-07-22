@@ -532,46 +532,10 @@ function renderEntry(){
 
     const bank = bankFor(state.stream);
     const result = await beginOrResumeSession(bank);
-
-    if(result.status === "blocked_submitted"){
-      alert("This Student ID has already completed this assessment. If you believe this is an error, please contact your lecturer.");
+    const outcome = applySessionResult(result);
+    if(outcome === "blocked" || outcome === "error"){
       startBtn.disabled = false; startBtn.textContent = "Start Assessment →";
-      return;
     }
-    if(result.status === "blocked_other_device"){
-      alert("This Student ID already has an assessment in progress or completed on a different device or browser. Please continue on the original device, or contact your lecturer.");
-      startBtn.disabled = false; startBtn.textContent = "Start Assessment →";
-      return;
-    }
-    if(result.status === "error"){
-      alert("Could not connect to the assessment server. Please check your internet connection and try again.");
-      startBtn.disabled = false; startBtn.textContent = "Start Assessment →";
-      return;
-    }
-
-    state.pages = result.pages;
-    state.flatOrder = state.pages.flat();
-    state.currentPage = 0;
-    state.startTime = result.startTime;
-    state.answers = result.answers;
-    state.images = result.images;
-    state.remaining = QUIZ_DURATION_SECONDS - Math.floor((Date.now()-state.startTime)/1000);
-
-    if(result.status === "expired"){
-      // Time had already run out while the student was away — finalize immediately.
-      state.screen = "results";
-      render();
-      return;
-    }
-
-    if(result.status === "resumed"){
-      alert("Your previous progress has been restored. Your timer continues from your original start time.");
-    }
-
-    state.screen = "quiz";
-    render();
-    startTimer();
-    window.onbeforeunload = ()=> "Your assessment is in progress. Leaving this page may lose your progress. Continue?";
   };
 }
 
@@ -666,6 +630,117 @@ function syncAnswersToServer(){
     db.collection("activeSessions").doc(matric).set({ answers: state.answers }, { merge:true })
       .catch(err=> console.error("Could not sync answer:", err));
   }, 600);
+}
+
+/* ---------------------------------------------------------------------
+   LOCAL "who am I" MEMORY — lets a refreshed/reopened tab recognize the
+   candidate automatically, so resuming a session doesn't require
+   re-typing their details. This only stores name/matric/email/stream
+   (never answers or photos) — the real progress always lives in
+   Firestore, this is purely so we know whose progress to fetch.
+--------------------------------------------------------------------- */
+const LOCAL_CANDIDATE_KEY = "kk12_jtk_candidate_v1";
+
+function saveLocalCandidate(){
+  try{
+    localStorage.setItem(LOCAL_CANDIDATE_KEY, JSON.stringify({
+      name: state.name, matric: state.matric, email: state.email, stream: state.stream
+    }));
+  }catch(e){ /* localStorage unavailable — auto-resume just won't work, manual Start still does */ }
+}
+function loadLocalCandidate(){
+  try{
+    const raw = localStorage.getItem(LOCAL_CANDIDATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function clearLocalCandidate(){
+  try{ localStorage.removeItem(LOCAL_CANDIDATE_KEY); }catch(e){}
+}
+
+function renderLoadingScreen(message){
+  app.innerHTML = `
+    <div class="entrywrap">
+      <div class="hero">
+        <div class="eyebrow">KK12 &middot; JTK</div>
+        <h1>KK12 JTK Selection Assessment</h1>
+      </div>
+      <div class="card" style="text-align:center;">
+        <p class="mono" style="color:#666;">${message}</p>
+      </div>
+    </div>
+  `;
+}
+
+/* Applies a beginOrResumeSession() result to app state and moves to the
+   right screen. Returns "started" | "expired" | "blocked" | "error". */
+function applySessionResult(result){
+  if(result.status === "blocked_submitted"){
+    alert("This Student ID has already completed this assessment. If you believe this is an error, please contact your lecturer.");
+    clearLocalCandidate();
+    return "blocked";
+  }
+  if(result.status === "blocked_other_device"){
+    alert("This Student ID already has an assessment in progress or completed on a different device or browser. Please continue on the original device, or contact your lecturer.");
+    return "blocked";
+  }
+  if(result.status === "error"){
+    alert("Could not connect to the assessment server. Please check your internet connection and try again.");
+    return "error";
+  }
+
+  state.pages = result.pages;
+  state.flatOrder = state.pages.flat();
+  state.currentPage = 0;
+  state.startTime = result.startTime;
+  state.answers = result.answers;
+  state.images = result.images;
+  state.remaining = QUIZ_DURATION_SECONDS - Math.floor((Date.now()-state.startTime)/1000);
+  saveLocalCandidate();
+
+  if(result.status === "expired"){
+    state.screen = "results";
+    render();
+    return "expired";
+  }
+
+  if(result.status === "resumed"){
+    alert("Welcome back — your previous progress has been restored. Your timer continues from your original start time.");
+  }
+
+  state.screen = "quiz";
+  render();
+  startTimer();
+  window.onbeforeunload = ()=> "Your assessment is in progress. Leaving this page may lose your progress. Continue?";
+  return "started";
+}
+
+/* Runs once at page load: if we recognize this browser as having an
+   assessment already underway, skip the entry form entirely and resume
+   straight into it. Otherwise falls back to the normal entry screen. */
+async function boot(){
+  const saved = loadLocalCandidate();
+  if(!saved || !saved.stream || !db){
+    render();
+    return;
+  }
+  state.name = saved.name || "";
+  state.matric = saved.matric || "";
+  state.email = saved.email || "";
+  state.stream = saved.stream || "";
+
+  renderLoadingScreen("Restoring your session…");
+  await authReady;
+  if(!myUid){
+    render();
+    return;
+  }
+  const bank = bankFor(state.stream);
+  const result = await beginOrResumeSession(bank);
+  const outcome = applySessionResult(result);
+  if(outcome === "blocked" || outcome === "error"){
+    render(); // fall back to the entry screen, pre-filled, for a manual retry
+  }
 }
 
 function startTimer(){
@@ -1014,6 +1089,7 @@ async function submitToServer(r){
 }
 
 async function finalizeSession(){
+  clearLocalCandidate();
   if(!db) return;
   const matric = state.matric.trim();
   if(!matric) return;
@@ -1026,7 +1102,7 @@ async function finalizeSession(){
   }
 }
 
-render();
+boot();
 </script>
 </body>
 </html>
