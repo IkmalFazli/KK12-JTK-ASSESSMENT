@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KK12 JTK Selection Assessment</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
@@ -333,10 +334,17 @@ const firebaseConfig = {
   appId: "1:577888096821:web:6b1914523f7100ff8f577c"
 };
 let db = null;
+let auth = null;
+let myUid = null;
+let authReady = Promise.resolve();
 try{
   if(firebaseConfig.apiKey.indexOf("PASTE_YOUR") !== 0){
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    auth = firebase.auth();
+    authReady = auth.signInAnonymously()
+      .then(cred=>{ myUid = cred.user.uid; })
+      .catch(err=>{ console.error("Anonymous sign-in failed:", err); });
   }
 }catch(err){ console.error("Firebase init failed:", err); }
 const LETTERS = ["A","B","C","D"];
@@ -351,17 +359,19 @@ let state = {
   screen: "entry",       // entry | quiz | results
   name: "",
   matric: "",
-  stream: "",            // "hayat" | "fizikal" | "sosial"
+  email: "",
+  stream: "",            // "hayat" | "fizikal" | "islamsains" | "sosial" | "diploma"
   startTime: null,
   remaining: QUIZ_DURATION_SECONDS,
   pages: [],             // array of NUM_PAGES pages, each an array of PAGE_SIZE question objects
   flatOrder: [],         // pages flattened, gives global 1..50 numbering
   currentPage: 0,
   answers: {},           // id -> selected index (within shuffled opts)
-  images: {},            // id -> array of {name, dataUrl}
+  images: {},            // id -> array of {name, dataUrl, firestoreId}
   locked: false,
   timerHandle: null,
   jumpTarget: null,      // qid to scroll to + highlight after next render
+  resuming: false,       // true while we're checking/restoring a saved session
 };
 
 function shuffle(arr){
@@ -373,9 +383,23 @@ function shuffle(arr){
   return a;
 }
 
+function bankNameFor(stream){
+  return (stream === "sosial" || stream === "diploma") ? "B" : "A";
+}
+function bankFor(stream){
+  return bankNameFor(stream) === "B" ? QUESTION_BANK_B : QUESTION_BANK_A;
+}
+
 function toShuffledQ(q){
-  const optObjs = q.opts.map((text,i)=>({text, correct:i===q.ans}));
-  return { id:q.id, needsWork:q.needsWork, q:q.q, opts: shuffle(optObjs) };
+  const optOrder = shuffle(q.opts.map((_,i)=>i)); // e.g. [2,0,3,1]
+  const opts = optOrder.map(i=>({text:q.opts[i], correct:i===q.ans}));
+  return { id:q.id, needsWork:q.needsWork, q:q.q, opts, optOrder };
+}
+
+function questionFromRecord(bank, rec){
+  const q = bank.find(bq=>bq.id===rec.id);
+  const opts = rec.optOrder.map(i=>({text:q.opts[i], correct:i===q.ans}));
+  return { id:q.id, needsWork:q.needsWork, q:q.q, opts, optOrder:rec.optOrder };
 }
 
 function buildRandomizedPages(bank){
@@ -389,6 +413,14 @@ function buildRandomizedPages(bank){
   }
   pages = shuffle(pages); // randomize the order the pages are presented in
   return pages;
+}
+
+function serializePages(pages){
+  return pages.map(page => page.map(q => ({ id:q.id, optOrder:q.optOrder })));
+}
+
+function reconstructPages(bank, pagesRecord){
+  return pagesRecord.map(page => page.map(rec => questionFromRecord(bank, rec)));
 }
 
 function streamLabel(){
@@ -448,6 +480,8 @@ function renderEntry(){
         <input type="text" id="nameInput" placeholder="e.g. Ahmad bin Ismail" value="${state.name}"/>
         <label class="field-label" for="matricInput">Student ID</label>
         <input type="text" id="matricInput" placeholder="e.g. 22324xxx" value="${state.matric}"/>
+        <label class="field-label" for="emailInput">Email</label>
+        <input type="text" id="emailInput" placeholder="e.g. name@example.com" value="${state.email}"/>
         <label class="field-label">Programme</label>
         <div class="streamgroup">
           <label class="streamopt"><input type="radio" name="stream" value="hayat" ${state.stream==='hayat'?'checked':''}/> Asasi Sains Hayat</label>
@@ -472,29 +506,165 @@ function renderEntry(){
   `;
   document.getElementById("nameInput").oninput = e=> state.name = e.target.value;
   document.getElementById("matricInput").oninput = e=> state.matric = e.target.value;
+  document.getElementById("emailInput").oninput = e=> state.email = e.target.value;
   document.querySelectorAll('input[name="stream"]').forEach(r=>{
     r.onchange = e=> state.stream = e.target.value;
   });
-  document.getElementById("startBtn").onclick = ()=>{
+  document.getElementById("startBtn").onclick = async ()=>{
     if(!state.name.trim() || !state.matric.trim()){
       alert("Please enter your name and candidate number before starting.");
+      return;
+    }
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email.trim());
+    if(!emailOk){
+      alert("Please enter a valid email address before starting.");
       return;
     }
     if(!state.stream){
       alert("Please select your programme before starting.");
       return;
     }
-    const bank = (state.stream === "sosial" || state.stream === "diploma") ? QUESTION_BANK_B : QUESTION_BANK_A;
-    state.pages = buildRandomizedPages(bank);
+
+    const startBtn = document.getElementById("startBtn");
+    startBtn.disabled = true;
+    startBtn.textContent = "Checking for an existing session…";
+
+    const bank = bankFor(state.stream);
+    const result = await beginOrResumeSession(bank);
+
+    if(result.status === "blocked_submitted"){
+      alert("This Student ID has already completed this assessment. If you believe this is an error, please contact your lecturer.");
+      startBtn.disabled = false; startBtn.textContent = "Start Assessment →";
+      return;
+    }
+    if(result.status === "blocked_other_device"){
+      alert("This Student ID already has an assessment in progress or completed on a different device or browser. Please continue on the original device, or contact your lecturer.");
+      startBtn.disabled = false; startBtn.textContent = "Start Assessment →";
+      return;
+    }
+    if(result.status === "error"){
+      alert("Could not connect to the assessment server. Please check your internet connection and try again.");
+      startBtn.disabled = false; startBtn.textContent = "Start Assessment →";
+      return;
+    }
+
+    state.pages = result.pages;
     state.flatOrder = state.pages.flat();
     state.currentPage = 0;
-    state.startTime = Date.now();
-    state.remaining = QUIZ_DURATION_SECONDS;
+    state.startTime = result.startTime;
+    state.answers = result.answers;
+    state.images = result.images;
+    state.remaining = QUIZ_DURATION_SECONDS - Math.floor((Date.now()-state.startTime)/1000);
+
+    if(result.status === "expired"){
+      // Time had already run out while the student was away — finalize immediately.
+      state.screen = "results";
+      render();
+      return;
+    }
+
+    if(result.status === "resumed"){
+      alert("Your previous progress has been restored. Your timer continues from your original start time.");
+    }
+
     state.screen = "quiz";
     render();
     startTimer();
     window.onbeforeunload = ()=> "Your assessment is in progress. Leaving this page may lose your progress. Continue?";
   };
+}
+
+/* ---------------------------------------------------------------------
+   SESSION PERSISTENCE (Firestore) — lets a refreshed/reopened tab resume
+   exactly where a candidate left off, using their Student ID as the key
+   and an anonymous auth UID to prove ownership of that session.
+--------------------------------------------------------------------- */
+async function beginOrResumeSession(bank){
+  const matric = state.matric.trim();
+  if(!db){
+    // No backend configured — fall back to a fresh, non-persisted session.
+    return { status:"new", pages: buildRandomizedPages(bank), startTime: Date.now(), answers:{}, images:{} };
+  }
+  await authReady;
+  if(!myUid){
+    return { status:"error" };
+  }
+
+  const sessionRef = db.collection("activeSessions").doc(matric);
+  try{
+    const snap = await sessionRef.get();
+    if(snap.exists){
+      const data = snap.data();
+      if(data.ownerUid !== myUid){
+        return { status:"blocked_other_device" };
+      }
+      if(data.submitted){
+        return { status:"blocked_submitted" };
+      }
+      // It's our own in-progress session — restore it.
+      const pages = reconstructPages(bank, data.pagesRecord);
+      const elapsed = Math.floor((Date.now() - new Date(data.startTime).getTime())/1000);
+      const images = await loadSessionPhotos(matric);
+      const restoreResult = {
+        status: elapsed >= QUIZ_DURATION_SECONDS ? "expired" : "resumed",
+        pages, startTime: new Date(data.startTime).getTime(),
+        answers: data.answers || {}, images
+      };
+      return restoreResult;
+    }
+  }catch(err){
+    // Permission denied here means the doc exists but belongs to someone else —
+    // Firestore rules reject reads of docs you don't own before we even see "exists".
+    if(err.code === "permission-denied"){
+      return { status:"blocked_other_device" };
+    }
+    console.error(err);
+    return { status:"error" };
+  }
+
+  // No existing session — create a fresh one.
+  const pages = buildRandomizedPages(bank);
+  const startTime = Date.now();
+  try{
+    await sessionRef.set({
+      ownerUid: myUid,
+      name: state.name, email: state.email, matric, stream: state.stream,
+      pagesRecord: serializePages(pages),
+      startTime: new Date(startTime).toISOString(),
+      answers: {},
+      submitted: false
+    });
+  }catch(err){
+    console.error(err);
+    return { status:"error" };
+  }
+  return { status:"new", pages, startTime, answers:{}, images:{} };
+}
+
+async function loadSessionPhotos(matric){
+  const images = {};
+  try{
+    const snap = await db.collection("sessionPhotos").where("matric","==",matric).get();
+    const docs = snap.docs.map(d=>({ id:d.id, ...d.data() }))
+      .sort((a,b)=> new Date(a.uploadedAt) - new Date(b.uploadedAt));
+    docs.forEach(d=>{
+      if(!images[d.qid]) images[d.qid] = [];
+      images[d.qid].push({ name:`Q${d.qid}.jpg`, dataUrl:d.dataUrl, firestoreId:d.id });
+    });
+  }catch(err){ console.error("Could not load saved photos:", err); }
+  return images;
+}
+
+let answersSyncTimer = null;
+function syncAnswersToServer(){
+  if(!db || !myUid) return;
+  const matric = state.matric.trim();
+  if(!matric) return;
+  clearTimeout(answersSyncTimer);
+  answersSyncTimer = setTimeout(()=>{
+    db.collection("activeSessions").doc(matric).set({ answers: state.answers }, { merge:true })
+      .catch(err=> console.error("Could not sync answer:", err));
+  }, 600);
 }
 
 function startTimer(){
@@ -658,6 +828,7 @@ window.selectAnswer = function(qid, idx){
   const n = globalNumberFor(qid);
   const box = document.querySelector(`.qbox[data-num="${n}"]`);
   if(box) box.classList.add("answered");
+  syncAnswersToServer();
 };
 
 window.attachImages = function(qid, fileList){
@@ -665,18 +836,32 @@ window.attachImages = function(qid, fileList){
   const files = Array.from(fileList);
   files.forEach(file=>{
     compressImage(file, 1000, 0.6).then(dataUrl=>{
-      state.images[qid].push({name:file.name, dataUrl});
+      const imgObj = {name:file.name, dataUrl};
+      state.images[qid].push(imgObj);
       renderThumbs(qid);
+      syncPhotoAdd(qid, dataUrl, imgObj);
     }).catch(()=>{
       const reader = new FileReader();
       reader.onload = e=>{
-        state.images[qid].push({name:file.name, dataUrl:e.target.result});
+        const imgObj = {name:file.name, dataUrl:e.target.result};
+        state.images[qid].push(imgObj);
         renderThumbs(qid);
+        syncPhotoAdd(qid, imgObj.dataUrl, imgObj);
       };
       reader.readAsDataURL(file);
     });
   });
 };
+
+function syncPhotoAdd(qid, dataUrl, imgObj){
+  if(!db || !myUid) return;
+  const matric = state.matric.trim();
+  if(!matric) return;
+  db.collection("sessionPhotos").add({
+    matric, ownerUid: myUid, qid: String(qid), dataUrl, uploadedAt: new Date().toISOString()
+  }).then(ref=>{ imgObj.firestoreId = ref.id; })
+    .catch(err=> console.error("Could not save photo:", err));
+}
 
 function compressImage(file, maxDim, quality){
   return new Promise((resolve, reject)=>{
@@ -703,6 +888,11 @@ function compressImage(file, maxDim, quality){
 }
 
 window.removeImage = function(qid, idx){
+  const imgObj = (state.images[qid]||[])[idx];
+  if(imgObj && imgObj.firestoreId && db){
+    db.collection("sessionPhotos").doc(imgObj.firestoreId).delete()
+      .catch(err=> console.error("Could not delete saved photo:", err));
+  }
   state.images[qid].splice(idx,1);
   renderThumbs(qid);
 };
@@ -783,6 +973,7 @@ async function submitToServer(r){
     const submissionRef = await db.collection("submissions").add({
       name: state.name,
       matric: state.matric,
+      email: state.email,
       stream: state.stream,
       streamLabel: streamLabel(),
       score: r.correct,
@@ -812,11 +1003,25 @@ async function submitToServer(r){
       });
     });
     await Promise.all(photoWrites);
+    await finalizeSession();
 
     if(statusEl) statusEl.textContent = "Submitted to the central database successfully.";
   }catch(err){
     console.error(err);
     if(statusEl) statusEl.textContent = "Could not reach the central database (no internet, or setup issue). Please stay on this screen, check your connection, and tell your lecturer if this doesn't resolve — do not close this tab.";
+  }
+}
+
+async function finalizeSession(){
+  if(!db) return;
+  const matric = state.matric.trim();
+  if(!matric) return;
+  try{
+    await db.collection("activeSessions").doc(matric).set({ submitted:true }, { merge:true });
+    const snap = await db.collection("sessionPhotos").where("matric","==",matric).get();
+    await Promise.all(snap.docs.map(d=> d.ref.delete()));
+  }catch(err){
+    console.error("Could not finalize session cleanup:", err);
   }
 }
 
